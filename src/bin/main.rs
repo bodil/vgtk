@@ -9,8 +9,7 @@ use gio::prelude::*;
 use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Button, ButtonBox, ButtonsType, DialogFlags, MessageDialog,
-    MessageType, Orientation, Window,
+    Application, Button, ButtonBox, ButtonsType, DialogFlags, MessageDialog, MessageType, Window,
 };
 
 fn not_much(b: &Button) {
@@ -27,13 +26,14 @@ fn not_much(b: &Button) {
 }
 
 fn activate(app: &gtk::Application) {
-    let window: ApplicationWindow = gtk!{
-        <ApplicationWindow(app) title="Updog",>
-            <ButtonBox(Orientation::Horizontal)>
-                <Button label="What's Updog?", on connect_clicked=not_much,/>
+    let window: Window = gtk!{
+        <Window title="Updog",>
+            <ButtonBox>
+                <Button label="What's Updog?", on connect_clicked=not_much, />
             </ButtonBox>
-        </ApplicationWindow>
-    };
+        </Window>
+    }.build();
+    app.add_window(&window);
     window.show_all();
 }
 
