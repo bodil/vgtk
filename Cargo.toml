@@ -1,0 +1,12 @@
+[package]
+name = "vgtk"
+version = "0.1.0"
+authors = ["Bodil Stokke <bodil@bodil.org>"]
+
+[dependencies]
+gio = "0.4.1"
+glib = "0.5.0"
+
+[dependencies.gtk]
+version = "0.4.1"
+features = ["v3_22", "embed-lgpl-docs"]
