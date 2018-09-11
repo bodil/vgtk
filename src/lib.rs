@@ -1,103 +1,73 @@
 extern crate gio;
 extern crate glib;
+extern crate glib_sys as glib_ffi;
+extern crate gobject_sys as gobject_ffi;
 extern crate gtk;
+extern crate gtk_sys as gtk_ffi;
 
-use glib::{Cast, IsA, Object, ObjectExt, SignalHandlerId, ToValue, Type, Value};
-use gtk::{Builder, BuilderExt, Container, ContainerExt, Widget};
+mod component;
+mod event;
+mod ffi;
+mod vobject;
 
-use std::collections::BTreeMap as OrdMap;
-use std::rc::Rc;
+use gio::prelude::*;
+use gio::ApplicationFlags;
+use glib::prelude::*;
+use gtk::prelude::*;
+use gtk::{idle_add, Window, WindowType};
 
-pub struct SignalConnector {
-    pub connect: Box<Fn(&Object) -> SignalHandlerId>,
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+
+pub use component::{Component, Scope, View};
+pub use event::{Event, SignalHandler};
+pub use vobject::VObject;
+
+pub struct Application<C: Component> {
+    model: C,
+    toplevel: Window,
+    queue: Arc<Mutex<VecDeque<C::Message>>>,
 }
 
-pub struct VObject {
-    pub type_: Type,
-    properties: OrdMap<String, Value>,
-    handlers: Vec<SignalConnector>,
-    children: Vec<Rc<VObject>>,
-}
-
-fn build_obj(class: Type, id: Option<&str>) -> Object {
-    let mut ui = String::new();
-    ui += &format!("<interface><object class=\"{}\"", class);
-    if let Some(id) = id {
-        ui += &format!(" id=\"{}\"", id);
-    }
-    ui += "/></interface>";
-
-    let builder = Builder::new_from_string(&ui);
-    let objects = builder.get_objects();
-    objects
-        .last()
-        .unwrap_or_else(|| panic!("unknown class {}", class))
-        .clone()
-}
-
-impl VObject {
-    pub fn new(type_: Type) -> Self {
-        VObject {
-            type_,
-            properties: Default::default(),
-            handlers: Default::default(),
-            children: Vec::new(),
-        }
-    }
-
-    pub fn set_property<Prop, Val>(&mut self, prop: Prop, value: &Val)
-    where
-        Prop: Into<String>,
-        Val: ToValue,
-    {
-        self.properties.insert(prop.into(), value.to_value());
-    }
-
-    pub fn add_handler(&mut self, connector: SignalConnector) {
-        self.handlers.push(connector)
-    }
-
-    pub fn add_child(&mut self, child: Self) {
-        self.children.push(Rc::new(child))
-    }
-
-    fn construct(&self) -> Object {
-        let mut obj = build_obj(
-            self.type_,
-            self.properties
-                .get("id")
-                .map(|v| v.get().expect("id property is not a string!")),
-        );
-
-        for (prop, value) in &self.properties {
-            if prop != "id" {
-                obj.set_property(prop.as_str(), value)
-                    .unwrap_or_else(|_| panic!("Class {} has no property {:?}", self.type_, prop));
-            }
-        }
-
-        for connector in &self.handlers {
-            (connector.connect)(&obj);
-        }
-
-        if !self.children.is_empty() {
-            let parent: Container = obj.downcast().expect("non-Container parent");
-            for child_spec in &self.children {
-                let child: Widget = child_spec.construct().downcast().expect("non-Widget child");
-                parent.add(&child);
-            }
-
-            obj = parent.upcast();
-        }
-
-        obj
-    }
-
-    pub fn build<A>(&self) -> A
-    where
-        A: IsA<Object>,
-    {
-        self.construct().downcast().unwrap()
+impl<C: 'static + Component + View<C>> Application<C> {
+    pub fn run(name: &str, flags: ApplicationFlags, args: &[String]) -> i32 {
+        let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
+        let app_init = app.clone();
+        app.connect_activate(move |_| {
+            let mut state = Application {
+                model: C::default(),
+                toplevel: Window::new(WindowType::Toplevel),
+                queue: Default::default(),
+            };
+            let scope = Scope {
+                queue: state.queue.clone(),
+            };
+            let view = state.model.view();
+            let window: Window = view.build(&scope);
+            app_init.add_window(&window);
+            window.show_all();
+            state.toplevel = window;
+            let app_loop = app_init.clone();
+            idle_add(move || {
+                // TODO this is busy waiting, maybe do better
+                if app_loop.get_windows().is_empty() {
+                    return Continue(false);
+                }
+                let mut q = state.queue.lock().unwrap();
+                let mut render = false;
+                while let Some(msg) = q.pop_front() {
+                    if state.model.update(msg) {
+                        render = true;
+                    }
+                }
+                if render {
+                    state.model.view().patch(&scope, &state.toplevel);
+                }
+                Continue(true)
+            });
+        });
+        app.activate();
+        app.run(args)
     }
 }
 
@@ -113,20 +83,16 @@ macro_rules! gtk {
     (@obj $class:ident $stack:ident ( on $signal:ident = |$args:pat| $handler:expr, $($tail:tt)* )) => {
         {
             let obj = $stack.last_mut().expect("stack was empty!");
-            let connector = $crate::SignalConnector {
-                connect: Box::new(|o| o.clone().downcast::<$class>().unwrap().$signal(move |$args| $handler))
-            };
-            obj.add_handler(connector);
+            let handler = $crate::SignalHandler::new(move |$args| $handler);
+            obj.add_handler(stringify!($signal), handler);
         }
         gtk!{ @obj $class $stack ($($tail)*) }
     };
     (@obj $class:ident $stack:ident ( on $signal:ident = $handler:expr, $($tail:tt)* )) => {
         {
             let obj = $stack.last_mut().expect("stack was empty!");
-            let connector = $crate::SignalConnector {
-                connect: Box::new(|o| o.clone().downcast::<$class>().unwrap().$signal($handler))
-            };
-            obj.add_handler(connector);
+            let handler = $crate::SignalHandler::new($handler);
+            obj.add_handler(stringify!($signal), handler);
         }
         gtk!{ @obj $class $stack ($($tail)*) }
     };
@@ -169,7 +135,7 @@ macro_rules! gtk {
         $stack.pop().expect("empty gtk! macro")
     };
     ($($tail:tt)*) => {{
-        let mut stack: Vec<$crate::VObject> = Vec::new();
+        let mut stack = Vec::new();
         gtk!{ stack ($($tail)*) }
     }}
 }
