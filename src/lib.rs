@@ -8,6 +8,7 @@ extern crate gtk_sys as gtk_ffi;
 mod component;
 mod event;
 mod ffi;
+mod vdom;
 mod vobject;
 
 use gio::prelude::*;
@@ -19,13 +20,15 @@ use gtk::{idle_add, Window, WindowType};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use vdom::GtkState;
+
 pub use component::{Component, Scope, View};
 pub use event::{Event, SignalHandler};
 pub use vobject::VObject;
 
 pub struct Application<C: Component> {
     model: C,
-    toplevel: Window,
+    ui_state: GtkState<C>,
     queue: Arc<Mutex<VecDeque<C::Message>>>,
 }
 
@@ -34,19 +37,25 @@ impl<C: 'static + Component + View<C>> Application<C> {
         let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
         let app_init = app.clone();
         app.connect_activate(move |_| {
-            let mut state = Application {
-                model: C::default(),
-                toplevel: Window::new(WindowType::Toplevel),
-                queue: Default::default(),
-            };
+            let queue: Arc<Mutex<VecDeque<C::Message>>> = Default::default();
             let scope = Scope {
-                queue: state.queue.clone(),
+                queue: queue.clone(),
             };
-            let view = state.model.view();
-            let window: Window = view.build(&scope);
-            app_init.add_window(&window);
-            window.show_all();
-            state.toplevel = window;
+            let model = C::default();
+            let ui_state = GtkState::build(&model.view(), None, &scope);
+            let mut state = Application {
+                model,
+                ui_state,
+                queue,
+            };
+            {
+                let window: &Window = state
+                    .ui_state
+                    .object()
+                    .expect("Application's top level widget must be a Window");
+                app_init.add_window(window);
+                window.show_all();
+            }
             let app_loop = app_init.clone();
             idle_add(move || {
                 // TODO this is busy waiting, maybe do better
@@ -61,7 +70,7 @@ impl<C: 'static + Component + View<C>> Application<C> {
                     }
                 }
                 if render {
-                    state.model.view().patch(&scope, &state.toplevel);
+                    state.ui_state.patch(&state.model.view(), None, &scope);
                 }
                 Continue(true)
             });
@@ -131,11 +140,31 @@ macro_rules! gtk {
         }
         gtk!{ $stack ($($tail)*) }
     };
+    ( $stack:ident ({ for $eval:expr } $($tail:tt)*)) => {
+        {
+            // TODO Handle child props or gtfo
+            let mut nodes = $eval;
+            if !$stack.is_empty() {
+                let parent = $stack.last_mut().unwrap();
+                for child in nodes {
+                    parent.add_child(child);
+                }
+            } else {
+                if let Some(node) = nodes.next() {
+                    debug_assert!(nodes.next().is_none(), "only one top level widget is allowed");
+                    $stack.push(node);
+                } else {
+                    panic!("for expression in gtk! macro produced no child nodes");
+                }
+            }
+        }
+        gtk!{ $stack ($($tail)*) }
+    };
     ($stack:ident ()) => {
         $stack.pop().expect("empty gtk! macro")
     };
     ($($tail:tt)*) => {{
         let mut stack = Vec::new();
         gtk!{ stack ($($tail)*) }
-    }}
+    }};
 }
