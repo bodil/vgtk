@@ -4,6 +4,7 @@ extern crate glib_sys as glib_ffi;
 extern crate gobject_sys as gobject_ffi;
 extern crate gtk;
 extern crate gtk_sys as gtk_ffi;
+extern crate im;
 
 mod component;
 mod event;
@@ -15,10 +16,7 @@ use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::prelude::*;
 use gtk::prelude::*;
-use gtk::{idle_add, Window, WindowType};
-
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use gtk::Window;
 
 use vdom::GtkState;
 
@@ -29,7 +27,7 @@ pub use vobject::VObject;
 pub struct Application<C: Component> {
     model: C,
     ui_state: GtkState<C>,
-    queue: Arc<Mutex<VecDeque<C::Message>>>,
+    scope: Scope<C>,
 }
 
 impl<C: 'static + Component + View<C>> Application<C> {
@@ -37,16 +35,14 @@ impl<C: 'static + Component + View<C>> Application<C> {
         let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
         let app_init = app.clone();
         app.connect_activate(move |_| {
-            let queue: Arc<Mutex<VecDeque<C::Message>>> = Default::default();
-            let scope = Scope {
-                queue: queue.clone(),
-            };
+            let scope = Scope::default();
             let model = C::default();
-            let ui_state = GtkState::build(&model.view(), None, &scope);
+            let initial_view = model.view();
+            let ui_state = GtkState::build(&initial_view, None, &scope);
             let mut state = Application {
                 model,
                 ui_state,
-                queue,
+                scope: scope.clone(),
             };
             {
                 let window: &Window = state
@@ -57,26 +53,48 @@ impl<C: 'static + Component + View<C>> Application<C> {
                 window.show_all();
             }
             let app_loop = app_init.clone();
-            idle_add(move || {
-                // TODO this is busy waiting, maybe do better
+            timeout_add(5, move || {
                 if app_loop.get_windows().is_empty() {
                     return Continue(false);
                 }
-                let mut q = state.queue.lock().unwrap();
                 let mut render = false;
-                while let Some(msg) = q.pop_front() {
-                    if state.model.update(msg) {
-                        render = true;
+                {
+                    let mut q = scope.queue.lock().unwrap();
+                    while let Some(msg) = q.pop_front() {
+                        if state.model.update(msg) {
+                            render = true;
+                        }
                     }
                 }
                 if render {
-                    state.ui_state.patch(&state.model.view(), None, &scope);
+                    let new_view = state.model.view();
+                    scope.mute();
+                    state.ui_state.patch(&new_view, None, &scope);
+                    scope.unmute();
                 }
                 Continue(true)
             });
         });
         app.activate();
         app.run(args)
+    }
+
+    pub fn process(&mut self) {
+        let mut render = false;
+        {
+            let mut q = self.scope.queue.lock().unwrap();
+            while let Some(msg) = q.pop_front() {
+                if self.model.update(msg) {
+                    render = true;
+                }
+            }
+        }
+        if render {
+            let new_view = self.model.view();
+            self.scope.mute();
+            self.ui_state.patch(&new_view, None, &self.scope);
+            self.scope.unmute();
+        }
     }
 }
 
@@ -92,7 +110,8 @@ macro_rules! gtk {
     (@obj $class:ident $stack:ident ( on $signal:ident = |$args:pat| $handler:expr, $($tail:tt)* )) => {
         {
             let obj = $stack.last_mut().expect("stack was empty!");
-            let handler = $crate::SignalHandler::new(move |$args| $handler);
+            let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
+            let handler = $crate::SignalHandler::new(id, move |$args| $handler);
             obj.add_handler(stringify!($signal), handler);
         }
         gtk!{ @obj $class $stack ($($tail)*) }
@@ -100,7 +119,8 @@ macro_rules! gtk {
     (@obj $class:ident $stack:ident ( on $signal:ident = $handler:expr, $($tail:tt)* )) => {
         {
             let obj = $stack.last_mut().expect("stack was empty!");
-            let handler = $crate::SignalHandler::new($handler);
+            let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
+            let handler = $crate::SignalHandler::new(id, $handler);
             obj.add_handler(stringify!($signal), handler);
         }
         gtk!{ @obj $class $stack ($($tail)*) }
@@ -130,7 +150,7 @@ macro_rules! gtk {
     ( $stack:ident (< / $class:ident > $($tail:tt)*)) => {
         {
             let child = $stack.pop().unwrap();
-            debug_assert!(child.type_ == $class::static_type());
+            debug_assert_eq!(child.type_, $class::static_type(), "you forgot to close a tag, closed one twice, or used `<tag/>` for a parent");
             if !$stack.is_empty() {
                 let parent = $stack.last_mut().unwrap();
                 parent.add_child(child);
@@ -157,6 +177,22 @@ macro_rules! gtk {
                     panic!("for expression in gtk! macro produced no child nodes");
                 }
             }
+        }
+        gtk!{ $stack ($($tail)*) }
+    };
+    ( $stack:ident ({ $($rule:expr => $body:expr)* } $($tail:tt)*)) => {
+        {
+            $(
+                if $rule {
+                    let mut node = $body;
+                    if !$stack.is_empty() {
+                        let parent = $stack.last_mut().unwrap();
+                        parent.add_child(node);
+                    } else {
+                        $stack.push(node);
+                    }
+                }
+            )*
         }
         gtk!{ $stack ($($tail)*) }
     };
