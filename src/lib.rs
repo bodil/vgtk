@@ -22,7 +22,7 @@ use vdom::GtkState;
 
 pub use component::{Component, Scope, View};
 pub use event::{Event, SignalHandler};
-pub use vobject::VObject;
+pub use vobject::{VItem, VObject};
 
 pub struct Application<C: Component> {
     model: C,
@@ -100,74 +100,95 @@ impl<C: 'static + Component + View<C>> Application<C> {
 
 #[macro_export]
 macro_rules! gtk {
+    // ( $stack:ident (< $class:ident : $($tail:tt)*)) => {
+    //     {
+    //         // let obj = $crate::VObject::new($class::static_type());
+    //         // $stack.push(obj);
+    //     }
+    //     gtk!{ @component $class $stack ($($tail)*) }
+    // };
+    // (@component $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
+    //     {
+    //         // let obj = $stack.last_mut().expect("stack was empty!");
+    //         // obj.set_property(stringify!($prop), &$value);
+    //     }
+    //     gtk!{ @component $class $stack ($($tail)*) }
+    // };
+    // (@component $class:ident $stack:ident (/ > $($tail:tt)*)) => {
+    //     {
+    //         // let child = $stack.pop().unwrap();
+    //         // if !$stack.is_empty() {
+    //         //     let parent = $stack.last_mut().unwrap();
+    //         //     parent.add_child(child);
+    //         // } else {
+    //         //     $stack.push(child);
+    //         // }
+    //     }
+    //     gtk!{ $stack ($($tail)*) }
+    // };
     ( $stack:ident (< $class:ident $($tail:tt)*)) => {
-        {
-            let obj = $crate::VObject::new($class::static_type());
-            $stack.push(obj);
-        }
-        gtk!{ @obj $class $stack ($($tail)*) }
+        let mut obj = $crate::VObject::new($class::static_type());
+        gtk!{ @obj obj $class $stack ($($tail)*) }
     };
-    (@obj $class:ident $stack:ident ( on $signal:ident = |$args:pat| $handler:expr, $($tail:tt)* )) => {
-        {
-            let obj = $stack.last_mut().expect("stack was empty!");
-            let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
-            let handler = $crate::SignalHandler::new(id, move |$args| $handler);
-            obj.add_handler(stringify!($signal), handler);
-        }
-        gtk!{ @obj $class $stack ($($tail)*) }
+    (@obj $obj:ident $class:ident $stack:ident ( on $signal:ident = |$args:pat| $handler:expr, $($tail:tt)* )) => {
+        let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
+        let handler = $crate::SignalHandler::new(id, move |$args| $handler);
+        $obj.add_handler(stringify!($signal), handler);
+        gtk!{ @obj $obj $class $stack ($($tail)*) }
     };
-    (@obj $class:ident $stack:ident ( on $signal:ident = $handler:expr, $($tail:tt)* )) => {
-        {
-            let obj = $stack.last_mut().expect("stack was empty!");
-            let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
-            let handler = $crate::SignalHandler::new(id, $handler);
-            obj.add_handler(stringify!($signal), handler);
-        }
-        gtk!{ @obj $class $stack ($($tail)*) }
+    (@obj $obj:ident $class:ident $stack:ident ( on $signal:ident = $handler:expr, $($tail:tt)* )) => {
+        let id = format!("{}:{}:{}:{}", file!(), module_path!(), line!(), column!());
+        let handler = $crate::SignalHandler::new(id, $handler);
+        $obj.add_handler(stringify!($signal), handler);
+        gtk!{ @obj $obj $class $stack ($($tail)*) }
     };
-    (@obj $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
-        {
-            let obj = $stack.last_mut().expect("stack was empty!");
-            obj.set_property(stringify!($prop), &$value);
-        }
-        gtk!{ @obj $class $stack ($($tail)*) }
+    (@obj $obj:ident $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
+        $obj.set_property(stringify!($prop), &$value);
+        gtk!{ @obj $obj $class $stack ($($tail)*) }
     };
-    (@obj $class:ident $stack:ident (/ > $($tail:tt)*)) => {
-        {
-            let child = $stack.pop().unwrap();
-            if !$stack.is_empty() {
-                let parent = $stack.last_mut().unwrap();
-                parent.add_child(child);
-            } else {
-                $stack.push(child);
+    (@obj $obj:ident $class:ident $stack:ident (/ > $($tail:tt)*)) => {
+        if !$stack.is_empty() {
+            match $stack.last_mut().unwrap() {
+                VItem::Object(parent) => parent.add_child(VItem::Object($obj)),
+                VItem::Component(_) => panic!("Components can't have children"),
             }
+        } else {
+            $stack.push(VItem::Object($obj));
         }
         gtk!{ $stack ($($tail)*) }
     };
-    (@obj $class:ident $stack:ident (> $($tail:tt)*)) => {
+    (@obj $obj:ident $class:ident $stack:ident (> $($tail:tt)*)) => {
+        $stack.push(VItem::Object($obj));
         gtk!{ $stack ($($tail)*) }
     };
     ( $stack:ident (< / $class:ident > $($tail:tt)*)) => {
-        {
-            let child = $stack.pop().unwrap();
-            debug_assert_eq!(child.type_, $class::static_type(), "you forgot to close a tag, closed one twice, or used `<tag/>` for a parent");
-            if !$stack.is_empty() {
-                let parent = $stack.last_mut().unwrap();
-                parent.add_child(child);
-            } else {
-                $stack.push(child);
+        match $stack.pop().unwrap() {
+            VItem::Object(child) => {
+                debug_assert_eq!(child.type_, $class::static_type(), "you forgot to close a tag, closed one twice, or used `<tag/>` for a parent");
+                if !$stack.is_empty() {
+                    match $stack.last_mut().unwrap() {
+                        VItem::Object(parent) => parent.add_child(VItem::Object(child)),
+                        VItem::Component(_) => panic!("Components can't have children"),
+                    }
+                } else {
+                    $stack.push(VItem::Object(child));
+                }
             }
+            VItem::Component(_) => panic!("Components can't have children"),
         }
         gtk!{ $stack ($($tail)*) }
     };
     ( $stack:ident ({ for $eval:expr } $($tail:tt)*)) => {
         {
-            // TODO Handle child props or gtfo
             let mut nodes = $eval;
             if !$stack.is_empty() {
-                let parent = $stack.last_mut().unwrap();
-                for child in nodes {
-                    parent.add_child(child);
+                match $stack.last_mut().unwrap() {
+                    VItem::Object(parent) => {
+                        for child in nodes {
+                            parent.add_child(child);
+                        }
+                    }
+                    VItem::Component(_) => panic!("Components can't have children"),
                 }
             } else {
                 if let Some(node) = nodes.next() {
@@ -186,8 +207,10 @@ macro_rules! gtk {
                 if $rule {
                     let mut node = $body;
                     if !$stack.is_empty() {
-                        let parent = $stack.last_mut().unwrap();
-                        parent.add_child(node);
+                        match $stack.last_mut().unwrap() {
+                            VItem::Object(parent) => parent.add_child(node),
+                            VItem::Component(_) => panic!("Components can't have children"),
+                        }
                     } else {
                         $stack.push(node);
                     }
@@ -200,7 +223,7 @@ macro_rules! gtk {
         $stack.pop().expect("empty gtk! macro")
     };
     ($($tail:tt)*) => {{
-        let mut stack = Vec::new();
+        let mut stack: Vec<VItem<_>> = Vec::new();
         gtk!{ stack ($($tail)*) }
     }};
 }

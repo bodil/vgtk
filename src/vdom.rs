@@ -11,7 +11,7 @@ use im::{OrdMap, OrdSet};
 use component::{Component, Scope};
 use event::SignalHandler;
 use ffi;
-use vobject::VObject;
+use vobject::{VItem, VObject};
 
 fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
     let mut ui = String::new();
@@ -39,18 +39,20 @@ pub struct GtkState<Model: Component> {
     children: Vec<GtkState<Model>>,
 }
 
+fn eq_values(left: &Value, right: &Value) -> bool {
+    if left.type_() != right.type_() {
+        return false;
+    }
+    // This is painful, but what can you do
+    format!("{:?}", left) == format!("{:?}", right)
+}
+
 fn set_property<O, P>(object: &O, parent: Option<&P>, prop: &str, mut value: Value)
 where
     O: IsA<Widget> + Cast,
     P: IsA<Container> + Cast,
 {
     let object: &Widget = object.upcast_ref();
-    // println!(
-    //     "Setting property on {}: {:?} => {:?}",
-    //     object.get_type(),
-    //     prop,
-    //     value.to_value()
-    // );
 
     // Handle special case hacks
     if let ("image", Some(name)) = (prop, value.get::<String>()) {
@@ -95,7 +97,18 @@ where
 }
 
 impl<Model: 'static + Component> GtkState<Model> {
-    pub fn build(vobj: &VObject<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+    pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+        match vitem {
+            VItem::Object(vobj) => Self::build_object(vobj, parent, scope),
+            VItem::Component(_) => unimplemented!(),
+        }
+    }
+
+    pub fn build_object(
+        vobj: &VObject<Model>,
+        parent: Option<&Container>,
+        scope: &Scope<Model>,
+    ) -> Self {
         let id = vobj
             .properties
             .get("id")
@@ -158,7 +171,6 @@ impl<Model: 'static + Component> GtkState<Model> {
             } else if let Some(parent) = object.downcast_ref::<Container>() {
                 for child_spec in &vobj.children {
                     let child = Self::build(child_spec, Some(parent), scope);
-                    parent.add(&child.object);
                     state.children.push(child);
                 }
             } else {
@@ -174,6 +186,18 @@ impl<Model: 'static + Component> GtkState<Model> {
 
     pub fn patch(
         &mut self,
+        vitem: &VItem<Model>,
+        parent: Option<&Container>,
+        scope: &Scope<Model>,
+    ) {
+        match vitem {
+            VItem::Object(vobj) => self.patch_object(vobj, parent, scope),
+            VItem::Component(_) => unimplemented!(),
+        }
+    }
+
+    pub fn patch_object(
+        &mut self,
         vobj: &VObject<Model>,
         parent: Option<&Container>,
         scope: &Scope<Model>,
@@ -185,19 +209,23 @@ impl<Model: 'static + Component> GtkState<Model> {
             let mut reconstruct_from = None;
             for index in 0..(self.children.len().max(vobj.children.len())) {
                 match (self.children.get_mut(index), vobj.children.get(index)) {
-                    (Some(target), Some(spec)) => {
-                        if target.object.get_type() == spec.type_ {
-                            // Objects have same type; patch down
-                            target.patch(spec, Some(parent), scope);
-                        } else {
-                            // Objects are different, need to reconstruct everything from here
-                            reconstruct_from = Some(index);
-                            break;
+                    (Some(target), Some(spec_item)) => {
+                        match **spec_item {
+                            VItem::Object(ref spec) => {
+                                if target.object.get_type() == spec.type_ {
+                                    // Objects have same type; patch down
+                                    target.patch(spec_item, Some(parent), scope);
+                                } else {
+                                    // Objects are different, need to reconstruct everything from here
+                                    reconstruct_from = Some(index);
+                                    break;
+                                }
+                            }
+                            VItem::Component(_) => unimplemented!(),
                         }
                     }
                     (Some(_), None) => {
                         // Extraneous Gtk object; delete
-                        println!("Found superfluous object -> will remove");
                         if to_remove.is_none() {
                             to_remove = Some(index);
                         }
@@ -212,9 +240,8 @@ impl<Model: 'static + Component> GtkState<Model> {
                             index,
                             vobj.children.len(),
                         ) {
+                            window.remove(&state.object);
                             window.set_titlebar(&state.object);
-                        } else {
-                            parent.add(&state.object);
                         }
                         to_append.push(state);
                     }
@@ -232,7 +259,6 @@ impl<Model: 'static + Component> GtkState<Model> {
                 // Rebuild children from new specs
                 for child_spec in vobj.children.iter().skip(index) {
                     let state = Self::build(child_spec, Some(parent), scope);
-                    parent.add(&state.object);
                     state.object.show();
                     self.children.push(state);
                 }
@@ -270,17 +296,18 @@ impl<Model: 'static + Component> GtkState<Model> {
                 match self.props.get(prop) {
                     Some(old_value) => {
                         if !eq_values(old_value, value) {
-                            set_property(&self.object, parent, prop, value.to_owned());
+                            set_property(&self.object, parent, prop, value.clone());
                         }
                     }
-                    None => set_property(&self.object, parent, prop, value.to_owned()),
+                    None => set_property(&self.object, parent, prop, value.clone()),
                 }
             }
         }
+        self.props = properties.clone();
     }
 
     fn patch_handlers(
-        &self,
+        &mut self,
         handlers: &OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
         scope: &Scope<Model>,
     ) {
@@ -327,17 +354,10 @@ impl<Model: 'static + Component> GtkState<Model> {
                 }
             }
         }
+        self.handlers = handlers.clone();
     }
 
     pub fn object<O: IsA<Widget>>(&self) -> Option<&O> {
         self.object.downcast_ref()
     }
-}
-
-fn eq_values(left: &Value, right: &Value) -> bool {
-    if left.type_() != right.type_() {
-        return false;
-    }
-    // This is painful, but what can you do
-    format!("{:?}", left) == format!("{:?}", right)
 }

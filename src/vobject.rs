@@ -1,7 +1,8 @@
 use glib::prelude::*;
 use glib::{Object, Type, Value};
+use std::marker::PhantomData;
 
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Error, Formatter};
 use std::rc::Rc;
 
 use im::{OrdMap, OrdSet};
@@ -9,11 +10,29 @@ use im::{OrdMap, OrdSet};
 use component::Component;
 use event::SignalHandler;
 
+pub enum VItem<Model: Component> {
+    Component(VComponent<Model>),
+    Object(VObject<Model>),
+}
+
+impl<Model: Component> Debug for VItem<Model> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            VItem::Component(_) => write!(f, "Component"),
+            VItem::Object(obj) => obj.fmt(f),
+        }
+    }
+}
+
+pub struct VComponent<Model: Component> {
+    profit: PhantomData<Model>,
+}
+
 pub struct VObject<Model: Component> {
     pub type_: Type,
     pub properties: OrdMap<String, Value>,
     pub handlers: OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
-    pub children: Vec<Rc<VObject<Model>>>,
+    pub children: Vec<Rc<VItem<Model>>>,
 }
 
 impl<Model: Component> Default for VObject<Model> {
@@ -52,7 +71,7 @@ impl<Model: Component> VObject<Model> {
             .insert(Rc::new(handler));
     }
 
-    pub fn add_child(&mut self, child: Self) {
+    pub fn add_child(&mut self, child: VItem<Model>) {
         self.children.push(Rc::new(child))
     }
 
@@ -66,7 +85,10 @@ impl<Model: Component> VObject<Model> {
         } else {
             write!(f, ">\n")?;
             for child in &self.children {
-                child.debug_print(indent + 2, f)?;
+                match &**child {
+                    VItem::Object(child) => child.debug_print(indent + 2, f)?,
+                    VItem::Component(_) => write!(f, "Component")?,
+                }
                 write!(f, "\n")?;
             }
             write!(f, "{: >indent$}</{}>", "", self.type_, indent = indent)

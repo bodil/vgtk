@@ -72,13 +72,11 @@ impl<C: Component + 'static> SignalHandler<C> {
             })
             .unwrap_or_else(|_e| panic!("invalid signal {:?} on {}", signal, obj.get_type())),
         ));
-        println!("Installed handler {:?}", self.id);
     }
 
     pub fn disconnect(&self, obj: &Object) {
         if let Some(id) = self.handler_id.replace(None) {
             obj.disconnect(id);
-            println!("Uninstalled handler {:?}", self.id);
         }
     }
 }

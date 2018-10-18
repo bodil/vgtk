@@ -1,4 +1,4 @@
-#![recursion_limit = "128"]
+#![recursion_limit = "16384"]
 #![allow(clippy::cyclomatic_complexity)]
 
 extern crate gio;
@@ -13,9 +13,50 @@ extern crate vgtk;
 use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{Application, Component, VObject, View};
+use vgtk::{Application, Component, VItem, View};
 
 use im::Vector;
+
+#[derive(Clone, Debug, Default)]
+struct Radio {
+    labels: Vec<String>,
+    active: usize,
+}
+
+enum RadioMsg {
+    Selected(usize),
+}
+
+impl Component for Radio {
+    type Message = RadioMsg;
+    type Properties = Radio;
+
+    fn create(props: Self::Properties) -> Self {
+        props
+    }
+
+    fn update(&mut self, msg: Self::Message) -> bool {
+        match msg {
+            RadioMsg::Selected(selected) => self.active = selected,
+        }
+        true
+    }
+}
+
+impl View<Radio> for Radio {
+    fn view(&self) -> VItem<Radio> {
+        gtk!{
+            <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
+                { for self.labels.iter().enumerate().map(|(index, label)| {
+                    gtk!{
+                        <ToggleButton label=label, active=index == self.active,
+                                      on toggled=|_| RadioMsg::Selected(index),/>
+                    }
+                }) }
+            </Box>
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum Filter {
@@ -80,6 +121,7 @@ enum Msg {
 
 impl Component for Model {
     type Message = Msg;
+    type Properties = ();
 
     fn update(&mut self, msg: Self::Message) -> bool {
         let left = self.filter(Filter::Active).count();
@@ -101,14 +143,14 @@ impl Component for Model {
 }
 
 impl View<Model> for Model {
-    fn view(&self) -> VObject<Model> {
+    fn view(&self) -> VItem<Model> {
         gtk!{
             <Window default_width=800, default_height=480, border_width=20u32,>
                 <HeaderBar title="TodoMVC", subtitle="wtf do we do now",
                            show_close_button=true, />
                 <Box spacing=10, orientation=Orientation::Vertical,>
                     <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
-                        <Button image=Image::new_from_icon_name("edit-select-all", IconSize::Button.into()),
+                        <Button image="edit-select-all",
                                 always_show_image=true, on clicked=|_| Msg::ToggleAll,/>
                         <Entry placeholder_text="What needs to be done?",
                                expand=true, fill=true,
@@ -128,6 +170,7 @@ impl View<Model> for Model {
                     </ScrolledWindow>
                     <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
                         <Label label=self.left_label(),/>
+                        // <Radio: labels=["All", "Active", "Completed"],/>
                         <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
                             <ToggleButton label="All", active=self.filter == Filter::All,
                                           on toggled=|_| Msg::Filter { filter:Filter::All },/>
@@ -149,7 +192,7 @@ impl View<Model> for Model {
     }
 }
 
-fn render_item(index: usize, item: &Item) -> VObject<Model> {
+fn render_item(index: usize, item: &Item) -> VItem<Model> {
     let label = if item.done {
         format!(
             "<span strikethrough=\"true\" alpha=\"50%\">{}</span>",

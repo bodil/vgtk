@@ -2,15 +2,19 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use vobject::VObject;
+use vobject::VItem;
 
 pub trait Component: Default {
     type Message: Send;
+    type Properties: Clone + Default;
     fn update(&mut self, msg: Self::Message) -> bool;
+    fn create(_props: Self::Properties) -> Self {
+        Self::default()
+    }
 }
 
 pub trait View<Model: Component> {
-    fn view(&self) -> VObject<Model>;
+    fn view(&self) -> VItem<Model>;
 }
 
 pub struct Scope<C: Component> {
