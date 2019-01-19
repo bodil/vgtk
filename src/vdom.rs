@@ -1,17 +1,57 @@
 use glib::prelude::*;
 use glib::{Object, Type, Value};
 use gtk::prelude::*;
-use gtk::{Box, Builder, Container, IconSize, Image, Widget, Window};
+use gtk::{self, Builder, Container, IconSize, Image, Widget, Window};
 
+use std::any::TypeId;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use im::ordmap::DiffItem;
 use im::{OrdMap, OrdSet};
 
-use component::{Component, Scope};
+use component::{Component, Scope, View};
 use event::SignalHandler;
 use ffi;
-use vobject::{VItem, VObject};
+use vcomp::{unwrap_props, AnyProps};
+use vitem::VItem;
+use vobject::VObject;
+
+pub enum State<Model: Component + View<Model>> {
+    Gtk(GtkState<Model>),
+    Component(ComponentState<Model>),
+}
+
+impl<Model: 'static + Component + View<Model>> State<Model> {
+    pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+        match vitem {
+            VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
+            VItem::Component(vcomp) => State::Component((vcomp.constructor)(vcomp.props, parent)),
+        }
+    }
+
+    pub fn patch(
+        &mut self,
+        vitem: &VItem<Model>,
+        parent: Option<&Container>,
+        scope: &Scope<Model>,
+    ) {
+        match vitem {
+            VItem::Object(vobj) => match self {
+                State::Gtk(state) => state.patch_object(vobj, parent, scope),
+                State::Component(_state) => unimplemented!(),
+            },
+            VItem::Component(_) => unimplemented!(),
+        }
+    }
+
+    pub fn object(&self) -> &Widget {
+        match self {
+            State::Gtk(state) => &state.object,
+            State::Component(state) => &state.object,
+        }
+    }
+}
 
 fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
     let mut ui = String::new();
@@ -32,11 +72,66 @@ fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
         .unwrap_or_else(|_| panic!("build_obj: cannot cast {} to {}", class, A::static_type()))
 }
 
-pub struct GtkState<Model: Component> {
+trait PropertiesReceiver {
+    fn update(&mut self, props: AnyProps);
+}
+
+pub struct ComponentState<Model: Component> {
+    parent: PhantomData<Model>,
+    object: Widget,
+    model_type: TypeId,
+    state: Box<dyn PropertiesReceiver>,
+}
+
+impl<Model: Component + View<Model>> ComponentState<Model> {
+    pub fn new<Child: 'static + Component + View<Child>>(
+        props: AnyProps,
+        parent: Option<&Container>,
+    ) -> Self {
+        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent);
+        ComponentState {
+            parent: PhantomData,
+            object,
+            model_type: TypeId::of::<Child>(),
+            state: Box::new(sub_state),
+        }
+    }
+}
+
+pub struct SubcomponentState<Model: Component + View<Model>> {
+    scope: Scope<Model>,
+    state: Model,
+    tree_state: State<Model>,
+}
+
+impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
+    fn new(props: AnyProps, parent: Option<&Container>) -> (Self, Widget) {
+        let props: Model::Properties = unwrap_props(props);
+        let scope = Scope::default();
+        let state = Model::create(props);
+        let tree = state.view();
+        let tree_state = State::build(&tree, parent, &scope);
+        let widget = tree_state.object().clone();
+        (
+            SubcomponentState {
+                scope,
+                state,
+                tree_state,
+            },
+            widget,
+        )
+    }
+}
+
+impl<Model: Component + View<Model>> PropertiesReceiver for SubcomponentState<Model> {
+    fn update(&mut self, _props: AnyProps) {}
+}
+
+pub struct GtkState<Model: Component + View<Model>> {
     object: Widget,
     props: OrdMap<String, Value>,
     handlers: OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
-    children: Vec<GtkState<Model>>,
+    children: Vec<State<Model>>,
 }
 
 fn eq_values(left: &Value, right: &Value) -> bool {
@@ -70,9 +165,9 @@ where
                     // Handle custom child properties
                     if prop == "center"
                         && value.to_value().get::<bool>() == Some(true)
-                        && parent.is::<Box>()
+                        && parent.is::<gtk::Box>()
                     {
-                        let parent = parent.downcast_ref::<Box>().unwrap();
+                        let parent = parent.downcast_ref::<gtk::Box>().unwrap();
                         parent.remove(object);
                         parent.set_center_widget(object);
                     } else {
@@ -96,19 +191,12 @@ where
     }
 }
 
-impl<Model: 'static + Component> GtkState<Model> {
-    pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
-        match vitem {
-            VItem::Object(vobj) => Self::build_object(vobj, parent, scope),
-            VItem::Component(_) => unimplemented!(),
-        }
+impl<Model: 'static + Component + View<Model>> GtkState<Model> {
+    pub fn object<T: IsA<Widget>>(&self) -> Option<&T> {
+        self.object.downcast_ref()
     }
 
-    pub fn build_object(
-        vobj: &VObject<Model>,
-        parent: Option<&Container>,
-        scope: &Scope<Model>,
-    ) -> Self {
+    pub fn build(vobj: &VObject<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         let id = vobj
             .properties
             .get("id")
@@ -150,15 +238,17 @@ impl<Model: 'static + Component> GtkState<Model> {
                 match vobj.children.len() {
                     2 => {
                         let header =
-                            Self::build(&vobj.children[0], Some(window.upcast_ref()), scope);
-                        window.remove(&header.object);
-                        window.set_titlebar(&header.object);
+                            State::build(&vobj.children[0], Some(window.upcast_ref()), scope);
+                        window.remove(header.object());
+                        window.set_titlebar(header.object());
                         state.children.push(header);
-                        let body = Self::build(&vobj.children[1], Some(window.upcast_ref()), scope);
+                        let body =
+                            State::build(&vobj.children[1], Some(window.upcast_ref()), scope);
                         state.children.push(body);
                     }
                     1 => {
-                        let body = Self::build(&vobj.children[0], Some(window.upcast_ref()), scope);
+                        let body =
+                            State::build(&vobj.children[0], Some(window.upcast_ref()), scope);
                         state.children.push(body);
                     }
                     length => {
@@ -170,7 +260,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                 }
             } else if let Some(parent) = object.downcast_ref::<Container>() {
                 for child_spec in &vobj.children {
-                    let child = Self::build(child_spec, Some(parent), scope);
+                    let child = State::build(child_spec, Some(parent), scope);
                     state.children.push(child);
                 }
             } else {
@@ -182,18 +272,6 @@ impl<Model: 'static + Component> GtkState<Model> {
         state.object.show();
 
         state
-    }
-
-    pub fn patch(
-        &mut self,
-        vitem: &VItem<Model>,
-        parent: Option<&Container>,
-        scope: &Scope<Model>,
-    ) {
-        match vitem {
-            VItem::Object(vobj) => self.patch_object(vobj, parent, scope),
-            VItem::Component(_) => unimplemented!(),
-        }
     }
 
     pub fn patch_object(
@@ -212,9 +290,9 @@ impl<Model: 'static + Component> GtkState<Model> {
                     (Some(target), Some(spec_item)) => {
                         match **spec_item {
                             VItem::Object(ref spec) => {
-                                if target.object.get_type() == spec.type_ {
+                                if target.object().get_type() == spec.type_ {
                                     // Objects have same type; patch down
-                                    target.patch(spec_item, Some(parent), scope);
+                                    target.patch(spec_item, Some(&parent), scope);
                                 } else {
                                     // Objects are different, need to reconstruct everything from here
                                     reconstruct_from = Some(index);
@@ -232,16 +310,14 @@ impl<Model: 'static + Component> GtkState<Model> {
                     }
                     (None, Some(spec)) => {
                         // New spec; construct
-                        let state = Self::build(spec, Some(parent), scope);
+                        let state = State::build(spec, Some(&parent), scope);
                         // Special case: the first child of a window with two
                         // children must be added with set_titlebar
-                        if let (Some(window), 0, 2) = (
-                            self.object.downcast_ref::<Window>(),
-                            index,
-                            vobj.children.len(),
-                        ) {
-                            window.remove(&state.object);
-                            window.set_titlebar(&state.object);
+                        if let (Some(window), 0, 2) =
+                            (parent.downcast_ref::<Window>(), index, vobj.children.len())
+                        {
+                            window.remove(state.object());
+                            window.set_titlebar(state.object());
                         }
                         to_append.push(state);
                     }
@@ -254,12 +330,12 @@ impl<Model: 'static + Component> GtkState<Model> {
                     panic!("Can't remove a title bar widget from an existing Window!");
                 }
                 for child in self.children.drain(index..) {
-                    parent.remove(&child.object);
+                    parent.remove(child.object());
                 }
                 // Rebuild children from new specs
                 for child_spec in vobj.children.iter().skip(index) {
-                    let state = Self::build(child_spec, Some(parent), scope);
-                    state.object.show();
+                    let state = State::build(child_spec, Some(&parent), scope);
+                    state.object().show();
                     self.children.push(state);
                 }
             } else {
@@ -269,7 +345,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                         panic!("Can't remove a title bar widget from an existing Window!");
                     }
                     for child in self.children.drain(remove_from..) {
-                        parent.remove(&child.object);
+                        parent.remove(child.object());
                     }
                 }
                 // Or append newly constructed children
@@ -277,7 +353,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                     panic!("Can't add a title bar widget to an existing Window!");
                 }
                 for child in to_append {
-                    child.object.show();
+                    child.object().show();
                     self.children.push(child);
                 }
             }
@@ -355,9 +431,5 @@ impl<Model: 'static + Component> GtkState<Model> {
             }
         }
         self.handlers = handlers.clone();
-    }
-
-    pub fn object<O: IsA<Widget>>(&self) -> Option<&O> {
-        self.object.downcast_ref()
     }
 }

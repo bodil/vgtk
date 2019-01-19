@@ -1,15 +1,19 @@
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use vobject::VItem;
+use vitem::VItem;
 
 pub trait Component: Default {
-    type Message: Send;
+    type Message: Send + Debug;
     type Properties: Clone + Default;
     fn update(&mut self, msg: Self::Message) -> bool;
     fn create(_props: Self::Properties) -> Self {
         Self::default()
+    }
+    fn change(&mut self, _props: Self::Properties) -> bool {
+        unimplemented!()
     }
 }
 
@@ -54,6 +58,7 @@ impl<C: Component> Scope<C> {
     }
 
     pub fn send_message(&self, msg: C::Message) {
+        println!("Scope::send_message {:?} {:?}", self.is_muted(), msg);
         if !self.is_muted() {
             self.queue.lock().unwrap().push_back(msg)
         }

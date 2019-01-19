@@ -1,32 +1,14 @@
 use glib::prelude::*;
 use glib::{Object, Type, Value};
-use std::marker::PhantomData;
+use vitem::VItem;
 
-use std::fmt::{self, Debug, Error, Formatter};
+use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use im::{OrdMap, OrdSet};
 
 use component::Component;
 use event::SignalHandler;
-
-pub enum VItem<Model: Component> {
-    Component(VComponent<Model>),
-    Object(VObject<Model>),
-}
-
-impl<Model: Component> Debug for VItem<Model> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            VItem::Component(_) => write!(f, "Component"),
-            VItem::Object(obj) => obj.fmt(f),
-        }
-    }
-}
-
-pub struct VComponent<Model: Component> {
-    profit: PhantomData<Model>,
-}
 
 pub struct VObject<Model: Component> {
     pub type_: Type,

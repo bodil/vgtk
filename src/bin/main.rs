@@ -13,7 +13,7 @@ extern crate vgtk;
 use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{Application, Component, VItem, View};
+use vgtk::{Application, Callback, Component, VItem, View};
 
 use im::Vector;
 
@@ -21,8 +21,10 @@ use im::Vector;
 struct Radio {
     labels: Vec<String>,
     active: usize,
+    on_changed: Option<Callback<usize>>,
 }
 
+#[derive(Debug)]
 enum RadioMsg {
     Selected(usize),
 }
@@ -35,9 +37,19 @@ impl Component for Radio {
         props
     }
 
+    fn change(&mut self, props: Self::Properties) -> bool {
+        *self = props;
+        true
+    }
+
     fn update(&mut self, msg: Self::Message) -> bool {
         match msg {
-            RadioMsg::Selected(selected) => self.active = selected,
+            RadioMsg::Selected(selected) => {
+                self.active = selected;
+                if let Some(ref callback) = self.on_changed {
+                    callback.send(self.active);
+                }
+            }
         }
         true
     }
@@ -45,7 +57,7 @@ impl Component for Radio {
 
 impl View<Radio> for Radio {
     fn view(&self) -> VItem<Radio> {
-        gtk!{
+        gtk! {
             <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
                 { for self.labels.iter().enumerate().map(|(index, label)| {
                     gtk!{
@@ -63,6 +75,25 @@ enum Filter {
     All,
     Active,
     Completed,
+}
+
+impl Filter {
+    fn from_index(index: usize) -> Self {
+        match index {
+            0 => Filter::All,
+            1 => Filter::Active,
+            2 => Filter::Completed,
+            _ => panic!(),
+        }
+    }
+
+    fn index_for(filter: Self) -> usize {
+        match filter {
+            Filter::All => 0,
+            Filter::Active => 1,
+            Filter::Completed => 2,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -110,6 +141,7 @@ impl Model {
     }
 }
 
+#[derive(Debug)]
 enum Msg {
     Add { item: String },
     Remove { index: usize },
@@ -144,7 +176,7 @@ impl Component for Model {
 
 impl View<Model> for Model {
     fn view(&self) -> VItem<Model> {
-        gtk!{
+        gtk! {
             <Window default_width=800, default_height=480, border_width=20u32,>
                 <HeaderBar title="TodoMVC", subtitle="wtf do we do now",
                            show_close_button=true, />
@@ -170,15 +202,24 @@ impl View<Model> for Model {
                     </ScrolledWindow>
                     <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
                         <Label label=self.left_label(),/>
-                        // <Radio: labels=["All", "Active", "Completed"],/>
-                        <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
-                            <ToggleButton label="All", active=self.filter == Filter::All,
-                                          on toggled=|_| Msg::Filter { filter:Filter::All },/>
-                            <ToggleButton label="Active", active=self.filter == Filter::Active,
-                                          on toggled=|_| Msg::Filter { filter:Filter::Active },/>
-                            <ToggleButton label="Completed", active=self.filter == Filter::Completed,
-                                          on toggled=|_| Msg::Filter { filter:Filter::Completed },/>
-                        </Box>
+                        <Radio:
+                            labels=vec![
+                                "All".to_string(),
+                                "Active".to_string(),
+                                "Completed".to_string()
+                            ],
+                            active=Filter::index_for(self.filter),
+                            on_changed=|index| {
+                                Msg::Filter { filter: Filter::from_index(index) }
+                            }, />
+                        // <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
+                        //     <ToggleButton label="All", active=self.filter == Filter::All,
+                        //                   on toggled=|_| Msg::Filter { filter:Filter::All },/>
+                        //     <ToggleButton label="Active", active=self.filter == Filter::Active,
+                        //                   on toggled=|_| Msg::Filter { filter:Filter::Active },/>
+                        //     <ToggleButton label="Completed", active=self.filter == Filter::Completed,
+                        //                   on toggled=|_| Msg::Filter { filter:Filter::Completed },/>
+                        // </Box>
                         {
                             self.filter(Filter::Completed).count() > 0 => gtk!{
                                 <Button label="Clear completed", pack_type=PackType::End,
@@ -201,7 +242,7 @@ fn render_item(index: usize, item: &Item) -> VItem<Model> {
     } else {
         item.label.clone()
     };
-    gtk!{
+    gtk! {
         <ListBoxRow>
             <Box spacing=10, orientation=Orientation::Horizontal,>
                 <CheckButton active=item.done, on toggled=|_| Msg::Toggle { index },/>
