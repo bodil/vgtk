@@ -21,14 +21,14 @@ use glib::prelude::*;
 use gtk::prelude::*;
 use gtk::Window;
 
-use vdom::State;
+use crate::vdom::State;
 
-pub use callback::Callback;
-pub use component::{Component, Scope, View};
-pub use event::{Event, SignalHandler};
-pub use vcomp::VComponent;
-pub use vitem::VItem;
-pub use vobject::VObject;
+pub use crate::callback::Callback;
+pub use crate::component::{Component, Scope, View};
+pub use crate::event::{Event, SignalHandler};
+pub use crate::vcomp::VComponent;
+pub use crate::vitem::VItem;
+pub use crate::vobject::VObject;
 
 pub struct Application<C: Component + View<C>> {
     model: C,

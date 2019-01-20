@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Error, Formatter};
 
-use component::Component;
-use vcomp::VComponent;
-use vobject::VObject;
+use crate::component::Component;
+use crate::vcomp::VComponent;
+use crate::vobject::VObject;
 
 pub enum VItem<Model: Component> {
     Component(VComponent<Model>),

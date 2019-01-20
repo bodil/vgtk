@@ -1,5 +1,5 @@
-use gobject_ffi;
-use gtk_ffi;
+use crate::gobject_ffi;
+use crate::gtk_ffi;
 
 use glib::translate::{from_glib, from_glib_none, mut_override, ToGlib, ToGlibPtr};
 use glib::{BoolError, ParamFlags, ParamSpec, ToValue};

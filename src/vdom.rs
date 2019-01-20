@@ -10,12 +10,12 @@ use std::rc::Rc;
 use im::ordmap::DiffItem;
 use im::{OrdMap, OrdSet};
 
-use component::{Component, Scope, View};
-use event::SignalHandler;
-use ffi;
-use vcomp::{unwrap_props, AnyProps};
-use vitem::VItem;
-use vobject::VObject;
+use crate::component::{Component, Scope, View};
+use crate::event::SignalHandler;
+use crate::ffi;
+use crate::vcomp::{unwrap_props, AnyProps};
+use crate::vitem::VItem;
+use crate::vobject::VObject;
 
 pub enum State<Model: Component + View<Model>> {
     Gtk(GtkState<Model>),

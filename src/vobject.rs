@@ -1,14 +1,14 @@
 use glib::prelude::*;
 use glib::{Object, Type, Value};
-use vitem::VItem;
+use crate::vitem::VItem;
 
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use im::{OrdMap, OrdSet};
 
-use component::Component;
-use event::SignalHandler;
+use crate::component::Component;
+use crate::event::SignalHandler;
 
 pub struct VObject<Model: Component> {
     pub type_: Type,

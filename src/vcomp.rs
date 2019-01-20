@@ -1,4 +1,4 @@
-use callback::Callback;
+use crate::callback::Callback;
 use gtk::Container;
 
 use std::any::{Any, TypeId};
@@ -6,8 +6,8 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use component::{Component, Scope, View};
-use vdom::ComponentState;
+use crate::component::{Component, Scope, View};
+use crate::vdom::ComponentState;
 
 pub type AnyProps = (TypeId, *mut ());
 type Constructor<Model> = Fn(AnyProps, Option<&Container>) -> ComponentState<Model>;

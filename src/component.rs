@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use vitem::VItem;
+use crate::vitem::VItem;
 
 pub trait Component: Default {
     type Message: Send + Debug;
