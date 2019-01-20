@@ -76,7 +76,9 @@ impl<C: 'static + Component + View<C>> Application<C> {
                 if render {
                     let new_view = state.model.view();
                     scope.mute();
-                    state.ui_state.patch(&new_view, None, &scope);
+                    if !state.ui_state.patch(&new_view, None, &scope) {
+                        panic!("Cannot change type of toplevel window");
+                    }
                     scope.unmute();
                 }
                 Continue(true)
@@ -99,7 +101,9 @@ impl<C: 'static + Component + View<C>> Application<C> {
         if render {
             let new_view = self.model.view();
             self.scope.mute();
-            self.ui_state.patch(&new_view, None, &self.scope);
+            if !self.ui_state.patch(&new_view, None, &self.scope) {
+                panic!("Cannot change type of toplevel window");
+            }
             self.scope.unmute();
         }
     }

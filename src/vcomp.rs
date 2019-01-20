@@ -44,7 +44,7 @@ impl<Model: 'static + Component + View<Model>> VComponent<Model> {
         props: Child::Properties,
         activators: Vec<LazyActivator<Model>>,
     ) -> Self {
-        let constructor: Box<Constructor<Model>> = Box::new(ComponentState::new::<Child>);
+        let constructor: Box<Constructor<Model>> = Box::new(ComponentState::build::<Child>);
         VComponent {
             parent: PhantomData,
             model_type: TypeId::of::<Child>(),
