@@ -28,7 +28,9 @@ impl<Model: 'static + Component + View<Model>> State<Model> {
     pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         match vitem {
             VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
-            VItem::Component(vcomp) => State::Component((vcomp.constructor)(vcomp.props, parent)),
+            VItem::Component(vcomp) => {
+                State::Component((vcomp.constructor)(vcomp.props, parent, scope))
+            }
         }
     }
 
@@ -97,8 +99,9 @@ impl<Model: Component + View<Model>> ComponentState<Model> {
     pub fn build<Child: 'static + Component + View<Child>>(
         props: AnyProps,
         parent: Option<&Container>,
+        scope: &Scope<Model>,
     ) -> Self {
-        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent);
+        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent, scope.inherit());
         ComponentState {
             parent: PhantomData,
             object,
@@ -125,9 +128,8 @@ pub struct SubcomponentState<Model: Component + View<Model>> {
 }
 
 impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
-    fn new(props: AnyProps, parent: Option<&Container>) -> (Self, Widget) {
+    fn new(props: AnyProps, parent: Option<&Container>, scope: Scope<Model>) -> (Self, Widget) {
         let props: Model::Properties = unwrap_props(props);
-        let scope = Scope::default();
         let state = Model::create(props);
         let tree = state.view();
         let tree_state = State::build(&tree, parent, &scope);

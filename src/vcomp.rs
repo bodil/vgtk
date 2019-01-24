@@ -10,7 +10,7 @@ use crate::component::{Component, Scope, View};
 use crate::vdom::ComponentState;
 
 pub type AnyProps = (TypeId, *mut ());
-type Constructor<Model> = Fn(AnyProps, Option<&Container>) -> ComponentState<Model>;
+type Constructor<Model> = Fn(AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
 type LazyActivator<Model> = Rc<RefCell<Option<Scope<Model>>>>;
 
 pub fn unwrap_props<Props: Any>((props_type, props_raw): AnyProps) -> Props {

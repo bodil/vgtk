@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::vitem::VItem;
@@ -22,15 +22,15 @@ pub trait View<Model: Component> {
 }
 
 pub struct Scope<C: Component> {
-    muted: Arc<AtomicBool>,
+    muted: Arc<AtomicUsize>,
     pub(crate) queue: Arc<Mutex<VecDeque<C::Message>>>,
 }
 
 impl<C: Component> Default for Scope<C> {
     fn default() -> Self {
         Scope {
-            muted: Arc::new(AtomicBool::new(false)),
-            queue: Arc::new(Mutex::new(VecDeque::new())),
+            muted: Default::default(),
+            queue: Default::default(),
         }
     }
 }
@@ -45,16 +45,23 @@ impl<C: Component> Clone for Scope<C> {
 }
 
 impl<C: Component> Scope<C> {
-    fn is_muted(&self) -> bool {
-        self.muted.load(Ordering::SeqCst)
+    pub fn inherit<Child: Component>(&self) -> Scope<Child> {
+        Scope {
+            muted: self.muted.clone(),
+            queue: Default::default(),
+        }
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.muted.load(Ordering::SeqCst) > 0
     }
 
     pub fn mute(&self) {
-        self.muted.store(true, Ordering::SeqCst)
+        self.muted.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn unmute(&self) {
-        self.muted.store(false, Ordering::SeqCst)
+        self.muted.fetch_sub(1, Ordering::SeqCst);
     }
 
     pub fn send_message(&self, msg: C::Message) {
