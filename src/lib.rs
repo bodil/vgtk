@@ -10,6 +10,7 @@ mod callback;
 mod component;
 mod event;
 mod ffi;
+mod mainloop;
 pub mod vcomp;
 mod vdom;
 mod vitem;
@@ -18,6 +19,7 @@ mod vobject;
 use gio::prelude::*;
 use gio::ApplicationFlags;
 use glib::prelude::*;
+use glib::MainContext;
 use gtk::prelude::*;
 use gtk::Window;
 
@@ -26,6 +28,7 @@ use crate::vdom::State;
 pub use crate::callback::Callback;
 pub use crate::component::{Component, Scope, View};
 pub use crate::event::{Event, SignalHandler};
+pub use crate::mainloop::{GtkMainLoop, MainLoop};
 pub use crate::vcomp::VComponent;
 pub use crate::vitem::VItem;
 pub use crate::vobject::VObject;
@@ -37,9 +40,12 @@ pub struct Application<C: Component + View<C>> {
 }
 
 impl<C: 'static + Component + View<C>> Application<C> {
-    pub fn run(name: &str, flags: ApplicationFlags, args: &[String]) -> i32 {
+    pub fn run(name: &str, flags: ApplicationFlags, _args: &[String]) -> i32 {
         let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
+        let main_loop = GtkMainLoop::new(MainContext::default());
+
         let app_init = app.clone();
+        let main_loop_init = main_loop.clone();
         app.connect_activate(move |_| {
             let scope = Scope::default();
             let model = C::default();
@@ -59,9 +65,12 @@ impl<C: 'static + Component + View<C>> Application<C> {
                 app_init.add_window(window);
                 window.show_all();
             }
+
             let app_loop = app_init.clone();
+            let main_loop_timer = main_loop_init.clone();
             timeout_add(5, move || {
                 if app_loop.get_windows().is_empty() {
+                    main_loop_timer.quit(0);
                     return Continue(false);
                 }
                 let mut render = false;
@@ -84,8 +93,10 @@ impl<C: 'static + Component + View<C>> Application<C> {
                 Continue(true)
             });
         });
+        app.set_default();
+        app.register(None).expect("application already running");
         app.activate();
-        app.run(args)
+        main_loop.run()
     }
 
     pub fn process(&mut self) {
