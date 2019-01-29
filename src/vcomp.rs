@@ -4,33 +4,45 @@ use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::callback::Callback;
 use crate::component::{Component, View};
 use crate::scope::Scope;
 use crate::vdom::ComponentState;
 
-pub type AnyProps = (TypeId, *mut ());
-type Constructor<Model> = Fn(AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
-type LazyActivator<Model> = Rc<RefCell<Option<Scope<Model>>>>;
+pub struct AnyProps {
+    valid: AtomicBool,
+    type_id: TypeId,
+    data: *mut (),
+}
 
-pub fn unwrap_props<Props: Any>((props_type, props_raw): AnyProps) -> Props {
-    if props_type != TypeId::of::<Props>() {
-        panic!(
-            "passed type {:?} to constructor expecting type {:?}",
-            props_type,
-            TypeId::of::<Props>()
-        )
+impl AnyProps {
+    pub fn new<Props: Any>(props: Props) -> Self {
+        AnyProps {
+            valid: AtomicBool::new(true),
+            type_id: TypeId::of::<Props>(),
+            data: Box::into_raw(Box::new(props)) as *mut (),
+        }
     }
-    unsafe { *Box::from_raw(props_raw as *mut Props) }
+
+    pub fn unwrap<Props: Any>(&self) -> Props {
+        if !self.valid.swap(false, Ordering::SeqCst) {
+            panic!("tried to unwrap AnyProps of type {:?} twice", self.type_id)
+        }
+        if self.type_id != TypeId::of::<Props>() {
+            panic!(
+                "passed type {:?} to constructor expecting type {:?}",
+                self.type_id,
+                TypeId::of::<Props>()
+            )
+        }
+        unsafe { *Box::from_raw(self.data as *mut Props) }
+    }
 }
 
-pub fn anonymise_props<Props: Any>(props: Props) -> AnyProps {
-    let boxed = Box::into_raw(Box::new(props));
-    let data = boxed as *mut ();
-    let type_id = TypeId::of::<Props>();
-    (type_id, data)
-}
+type Constructor<Model> = Fn(&AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
+type LazyActivator<Model> = Rc<RefCell<Option<Scope<Model>>>>;
 
 pub struct VComponent<Model: Component> {
     parent: PhantomData<Model>,
@@ -49,7 +61,7 @@ impl<Model: 'static + Component + View<Model>> VComponent<Model> {
         VComponent {
             parent: PhantomData,
             model_type: TypeId::of::<Child>(),
-            props: anonymise_props(props),
+            props: AnyProps::new(props),
             constructor,
             activators,
         }

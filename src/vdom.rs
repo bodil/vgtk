@@ -16,7 +16,7 @@ use crate::event::SignalHandler;
 use crate::ffi;
 use crate::mainloop::MainLoop;
 use crate::scope::{ComponentMessage, ComponentTask, Scope};
-use crate::vcomp::{unwrap_props, AnyProps, VComponent};
+use crate::vcomp::{AnyProps, VComponent};
 use crate::vitem::VItem;
 use crate::vobject::VObject;
 
@@ -31,7 +31,7 @@ impl<Model: 'static + Component + View<Model>> State<Model> {
         match vitem {
             VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
             VItem::Component(vcomp) => {
-                let comp = (vcomp.constructor)(vcomp.props, parent, scope);
+                let comp = (vcomp.constructor)(&vcomp.props, parent, scope);
                 for activator in &vcomp.activators {
                     activator.replace(Some(scope.clone()));
                 }
@@ -91,7 +91,7 @@ fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
 }
 
 trait PropertiesReceiver {
-    fn update(&mut self, props: AnyProps);
+    fn update(&mut self, props: &AnyProps);
     fn unmounting(&self);
 }
 
@@ -104,7 +104,7 @@ pub struct ComponentState<Model: Component> {
 
 impl<Model: 'static + Component + View<Model>> ComponentState<Model> {
     pub fn build<Child: 'static + Component + View<Child>>(
-        props: AnyProps,
+        props: &AnyProps,
         parent: Option<&Container>,
         scope: &Scope<Model>,
     ) -> Self {
@@ -123,7 +123,7 @@ impl<Model: 'static + Component + View<Model>> ComponentState<Model> {
             for activator in &spec.activators {
                 activator.replace(Some(scope.clone()));
             }
-            self.state.update(spec.props);
+            self.state.update(&spec.props);
             true
         } else {
             // Component type changed; need to rebuild
@@ -139,11 +139,11 @@ pub struct SubcomponentState<Model: Component + View<Model>> {
 
 impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
     fn new<P: 'static + Component + View<P>>(
-        props: AnyProps,
+        props: &AnyProps,
         parent: Option<&Container>,
         parent_scope: &Scope<P>,
     ) -> (Self, Widget) {
-        let props: Model::Properties = unwrap_props(props);
+        let props: Model::Properties = props.unwrap();
         let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
         let widget = task.widget();
 
@@ -153,8 +153,8 @@ impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
 }
 
 impl<Model: 'static + Component + View<Model>> PropertiesReceiver for SubcomponentState<Model> {
-    fn update(&mut self, raw_props: AnyProps) {
-        let props = unwrap_props(raw_props);
+    fn update(&mut self, raw_props: &AnyProps) {
+        let props = raw_props.unwrap();
         self.channel
             .unbounded_send(ComponentMessage::Props(props))
             .expect("failed to send props message over system channel")
