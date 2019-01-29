@@ -1,4 +1,4 @@
-use crate::vcomp::VComponent;
+use glib::futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
 use glib::{Object, Type, Value};
 use gtk::prelude::*;
@@ -11,10 +11,12 @@ use std::rc::Rc;
 use im::ordmap::DiffItem;
 use im::{OrdMap, OrdSet};
 
-use crate::component::{Component, Scope, View};
+use crate::component::{Component, View};
 use crate::event::SignalHandler;
 use crate::ffi;
-use crate::vcomp::{unwrap_props, AnyProps};
+use crate::mainloop::MainLoop;
+use crate::scope::{ComponentMessage, ComponentTask, Scope};
+use crate::vcomp::{unwrap_props, AnyProps, VComponent};
 use crate::vitem::VItem;
 use crate::vobject::VObject;
 
@@ -29,7 +31,11 @@ impl<Model: 'static + Component + View<Model>> State<Model> {
         match vitem {
             VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
             VItem::Component(vcomp) => {
-                State::Component((vcomp.constructor)(vcomp.props, parent, scope))
+                let comp = (vcomp.constructor)(vcomp.props, parent, scope);
+                for activator in &vcomp.activators {
+                    activator.replace(Some(scope.clone()));
+                }
+                State::Component(comp)
             }
         }
     }
@@ -50,7 +56,7 @@ impl<Model: 'static + Component + View<Model>> State<Model> {
                 State::Component(_) => false,
             },
             VItem::Component(vcomp) => match self {
-                State::Component(state) => state.patch(vcomp),
+                State::Component(state) => state.patch(vcomp, scope),
                 State::Gtk(_) => false,
             },
         }
@@ -85,7 +91,8 @@ fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
 }
 
 trait PropertiesReceiver {
-    fn update(&mut self, props: AnyProps) -> bool;
+    fn update(&mut self, props: AnyProps);
+    fn unmounting(&self);
 }
 
 pub struct ComponentState<Model: Component> {
@@ -95,13 +102,13 @@ pub struct ComponentState<Model: Component> {
     state: Box<dyn PropertiesReceiver>,
 }
 
-impl<Model: Component + View<Model>> ComponentState<Model> {
+impl<Model: 'static + Component + View<Model>> ComponentState<Model> {
     pub fn build<Child: 'static + Component + View<Child>>(
         props: AnyProps,
         parent: Option<&Container>,
         scope: &Scope<Model>,
     ) -> Self {
-        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent, scope.inherit());
+        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent, scope);
         ComponentState {
             parent: PhantomData,
             object,
@@ -110,48 +117,53 @@ impl<Model: Component + View<Model>> ComponentState<Model> {
         }
     }
 
-    pub fn patch(&mut self, spec: &VComponent<Model>) -> bool {
+    pub fn patch(&mut self, spec: &VComponent<Model>, scope: &Scope<Model>) -> bool {
         if self.model_type == spec.model_type {
             // Components have same type; update props
-            self.state.update(spec.props)
+            for activator in &spec.activators {
+                activator.replace(Some(scope.clone()));
+            }
+            self.state.update(spec.props);
+            true
         } else {
             // Component type changed; need to rebuild
+            self.state.unmounting();
             false
         }
     }
 }
 
 pub struct SubcomponentState<Model: Component + View<Model>> {
-    scope: Scope<Model>,
-    state: Model,
-    tree_state: State<Model>,
+    channel: UnboundedSender<ComponentMessage<Model>>,
 }
 
 impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
-    fn new(props: AnyProps, parent: Option<&Container>, scope: Scope<Model>) -> (Self, Widget) {
+    fn new<P: 'static + Component + View<P>>(
+        props: AnyProps,
+        parent: Option<&Container>,
+        parent_scope: &Scope<P>,
+    ) -> (Self, Widget) {
         let props: Model::Properties = unwrap_props(props);
-        let state = Model::create(props);
-        let tree = state.view();
-        let tree_state = State::build(&tree, parent, &scope);
-        let widget = tree_state.object().clone();
-        (
-            SubcomponentState {
-                scope,
-                state,
-                tree_state,
-            },
-            widget,
-        )
+        let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
+        let widget = task.widget();
+
+        crate::MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
+        (SubcomponentState { channel }, widget)
     }
 }
 
 impl<Model: 'static + Component + View<Model>> PropertiesReceiver for SubcomponentState<Model> {
-    fn update(&mut self, raw_props: AnyProps) -> bool {
-        if self.state.change(unwrap_props(raw_props)) {
-            let new_tree = self.state.view();
-            return self.tree_state.patch(&new_tree, None, &self.scope);
-        }
-        true
+    fn update(&mut self, raw_props: AnyProps) {
+        let props = unwrap_props(raw_props);
+        self.channel
+            .unbounded_send(ComponentMessage::Props(props))
+            .expect("failed to send props message over system channel")
+    }
+
+    fn unmounting(&self) {
+        self.channel
+            .unbounded_send(ComponentMessage::Unmounted)
+            .expect("failed to send unmount message over system channel")
     }
 }
 
@@ -319,7 +331,7 @@ impl<Model: 'static + Component + View<Model>> GtkState<Model> {
                                 break;
                             }
                             VItem::Component(ref spec) => {
-                                if !target.patch(spec) {
+                                if !target.patch(spec, scope) {
                                     reconstruct_from = Some(index);
                                     break;
                                 }

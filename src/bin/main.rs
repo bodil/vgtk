@@ -13,7 +13,7 @@ extern crate vgtk;
 use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{Application, Callback, Component, VItem, View};
+use vgtk::{run, Callback, Component, VItem, View};
 
 use im::Vector;
 
@@ -24,7 +24,7 @@ struct Radio {
     on_changed: Option<Callback<usize>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum RadioMsg {
     Selected(usize),
 }
@@ -141,7 +141,7 @@ impl Model {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Msg {
     Add { item: String },
     Remove { index: usize },
@@ -149,6 +149,7 @@ enum Msg {
     Filter { filter: Filter },
     ToggleAll,
     ClearCompleted,
+    Exit,
 }
 
 impl Component for Model {
@@ -169,6 +170,9 @@ impl Component for Model {
             Msg::ToggleAll if left > 0 => self.items.iter_mut().for_each(|item| item.done = true),
             Msg::ToggleAll => self.items.iter_mut().for_each(|item| item.done = false),
             Msg::ClearCompleted => self.items.retain(|item| !item.done),
+            Msg::Exit => {
+                vgtk::main_quit(0);
+            }
         }
         true
     }
@@ -177,7 +181,7 @@ impl Component for Model {
 impl View<Model> for Model {
     fn view(&self) -> VItem<Model> {
         gtk! {
-            <Window default_width=800, default_height=480, border_width=20u32,>
+            <Window default_width=800, default_height=480, border_width=20u32, on destroy=|_| Msg::Exit,>
                 <HeaderBar title="TodoMVC", subtitle="wtf do we do now",
                            show_close_button=true, />
                 <Box spacing=10, orientation=Orientation::Vertical,>
@@ -257,7 +261,7 @@ fn render_item(index: usize, item: &Item) -> VItem<Model> {
 
 fn main() {
     let args: Vec<String> = ::std::env::args().collect();
-    ::std::process::exit(Application::<Model>::run(
+    ::std::process::exit(run::<Model>(
         "camp.lol.updog",
         ApplicationFlags::empty(),
         &args,

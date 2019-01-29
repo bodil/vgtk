@@ -5,7 +5,6 @@ pub struct Callback<A>(Rc<Fn(A)>);
 
 impl<A: Debug> Callback<A> {
     pub fn send(&self, value: A) {
-        println!("Callback activated: {:?}", value);
         (self.0)(value)
     }
 }

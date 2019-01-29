@@ -1,4 +1,3 @@
-use crate::callback::Callback;
 use gtk::Container;
 
 use std::any::{Any, TypeId};
@@ -6,7 +5,9 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::component::{Component, Scope, View};
+use crate::callback::Callback;
+use crate::component::{Component, View};
+use crate::scope::Scope;
 use crate::vdom::ComponentState;
 
 pub type AnyProps = (TypeId, *mut ());

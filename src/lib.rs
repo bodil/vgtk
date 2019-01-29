@@ -11,6 +11,7 @@ mod component;
 mod event;
 mod ffi;
 mod mainloop;
+mod scope;
 pub mod vcomp;
 mod vdom;
 mod vitem;
@@ -23,101 +24,47 @@ use glib::MainContext;
 use gtk::prelude::*;
 use gtk::Window;
 
-use crate::vdom::State;
+use crate::scope::{ComponentMessage, ComponentTask};
 
 pub use crate::callback::Callback;
-pub use crate::component::{Component, Scope, View};
+pub use crate::component::{Component, View};
 pub use crate::event::{Event, SignalHandler};
 pub use crate::mainloop::{GtkMainLoop, MainLoop};
+pub use crate::scope::Scope;
 pub use crate::vcomp::VComponent;
 pub use crate::vitem::VItem;
 pub use crate::vobject::VObject;
 
-pub struct Application<C: Component + View<C>> {
-    model: C,
-    ui_state: State<C>,
-    scope: Scope<C>,
+thread_local! {
+    pub static MAIN_LOOP: GtkMainLoop = GtkMainLoop::new(MainContext::default());
 }
 
-impl<C: 'static + Component + View<C>> Application<C> {
-    pub fn run(name: &str, flags: ApplicationFlags, _args: &[String]) -> i32 {
+pub fn main_quit(return_code: i32) {
+    MAIN_LOOP.with(|main_loop| main_loop.quit(return_code))
+}
+
+pub fn run<C: 'static + Component + View<C>>(
+    name: &str,
+    flags: ApplicationFlags,
+    _args: &[String],
+) -> i32 {
+    MAIN_LOOP.with(|main_loop| {
         let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
-        let main_loop = GtkMainLoop::new(MainContext::default());
-
-        let app_init = app.clone();
-        let main_loop_init = main_loop.clone();
+        let (_scope, channel, task) = ComponentTask::<C, C>::new(Default::default(), None, None);
+        let window: Window = task
+            .widget()
+            .downcast()
+            .expect("Application's top level widget must be a Window");
+        main_loop.spawn(task);
         app.connect_activate(move |_| {
-            let scope = Scope::default();
-            let model = C::default();
-            let initial_view = model.view();
-            let ui_state = State::build(&initial_view, None, &scope);
-            let mut state = Application {
-                model,
-                ui_state,
-                scope: scope.clone(),
-            };
-            {
-                let window: &Window = state
-                    .ui_state
-                    .object()
-                    .downcast_ref()
-                    .expect("Application's top level widget must be a Window");
-                app_init.add_window(window);
-                window.show_all();
-            }
-
-            let app_loop = app_init.clone();
-            let main_loop_timer = main_loop_init.clone();
-            timeout_add(5, move || {
-                if app_loop.get_windows().is_empty() {
-                    main_loop_timer.quit(0);
-                    return Continue(false);
-                }
-                let mut render = false;
-                {
-                    let mut q = scope.queue.lock().unwrap();
-                    while let Some(msg) = q.pop_front() {
-                        if state.model.update(msg) {
-                            render = true;
-                        }
-                    }
-                }
-                if render {
-                    let new_view = state.model.view();
-                    scope.mute();
-                    if !state.ui_state.patch(&new_view, None, &scope) {
-                        panic!("Cannot change type of toplevel window");
-                    }
-                    scope.unmute();
-                }
-                Continue(true)
-            });
+            window.show_all();
+            channel.unbounded_send(ComponentMessage::Mounted).unwrap();
         });
         app.set_default();
         app.register(None).expect("application already running");
         app.activate();
         main_loop.run()
-    }
-
-    pub fn process(&mut self) {
-        let mut render = false;
-        {
-            let mut q = self.scope.queue.lock().unwrap();
-            while let Some(msg) = q.pop_front() {
-                if self.model.update(msg) {
-                    render = true;
-                }
-            }
-        }
-        if render {
-            let new_view = self.model.view();
-            self.scope.mute();
-            if !self.ui_state.patch(&new_view, None, &self.scope) {
-                panic!("Cannot change type of toplevel window");
-            }
-            self.scope.unmute();
-        }
-    }
+    })
 }
 
 #[macro_export]

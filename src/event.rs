@@ -5,7 +5,8 @@ use std::cmp::Ordering;
 
 use std::sync::Arc;
 
-use crate::component::{Component, Scope};
+use crate::component::Component;
+use crate::scope::Scope;
 
 pub struct Event {
     pub source: Object,
