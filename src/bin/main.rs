@@ -13,7 +13,7 @@ extern crate vgtk;
 use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{run, Callback, Component, VItem, View};
+use vgtk::{run, Callback, Component, VItem};
 
 use im::Vector;
 
@@ -53,9 +53,7 @@ impl Component for Radio {
         }
         true
     }
-}
 
-impl View<Radio> for Radio {
     fn view(&self) -> VItem<Radio> {
         gtk! {
             <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
@@ -176,9 +174,7 @@ impl Component for Model {
         }
         true
     }
-}
 
-impl View<Model> for Model {
     fn view(&self) -> VItem<Model> {
         gtk! {
             <Window default_width=800, default_height=480, border_width=20u32, on destroy=|_| Msg::Exit,>

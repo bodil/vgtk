@@ -11,7 +11,7 @@ use std::rc::Rc;
 use im::ordmap::DiffItem;
 use im::{OrdMap, OrdSet};
 
-use crate::component::{Component, ComponentMessage, ComponentTask, View};
+use crate::component::{Component, ComponentMessage, ComponentTask};
 use crate::event::SignalHandler;
 use crate::ffi;
 use crate::mainloop::MainLoop;
@@ -20,12 +20,12 @@ use crate::vcomp::{AnyProps, VComponent};
 use crate::vitem::VItem;
 use crate::vobject::VObject;
 
-pub enum State<Model: Component + View<Model>> {
+pub enum State<Model: Component> {
     Gtk(GtkState<Model>),
     Component(ComponentState<Model>),
 }
 
-impl<Model: 'static + Component + View<Model>> State<Model> {
+impl<Model: 'static + Component> State<Model> {
     /// Build a state from a `VItem` spec.
     pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         match vitem {
@@ -102,8 +102,8 @@ pub struct ComponentState<Model: Component> {
     state: Box<dyn PropertiesReceiver>,
 }
 
-impl<Model: 'static + Component + View<Model>> ComponentState<Model> {
-    pub fn build<Child: 'static + Component + View<Child>>(
+impl<Model: 'static + Component> ComponentState<Model> {
+    pub fn build<Child: 'static + Component>(
         props: &AnyProps,
         parent: Option<&Container>,
         scope: &Scope<Model>,
@@ -133,12 +133,12 @@ impl<Model: 'static + Component + View<Model>> ComponentState<Model> {
     }
 }
 
-pub struct SubcomponentState<Model: Component + View<Model>> {
+pub struct SubcomponentState<Model: Component> {
     channel: UnboundedSender<ComponentMessage<Model>>,
 }
 
-impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
-    fn new<P: 'static + Component + View<P>>(
+impl<Model: 'static + Component> SubcomponentState<Model> {
+    fn new<P: 'static + Component>(
         props: &AnyProps,
         parent: Option<&Container>,
         parent_scope: &Scope<P>,
@@ -152,7 +152,7 @@ impl<Model: 'static + Component + View<Model>> SubcomponentState<Model> {
     }
 }
 
-impl<Model: 'static + Component + View<Model>> PropertiesReceiver for SubcomponentState<Model> {
+impl<Model: 'static + Component> PropertiesReceiver for SubcomponentState<Model> {
     fn update(&mut self, raw_props: &AnyProps) {
         let props = raw_props.unwrap();
         self.channel
@@ -167,7 +167,7 @@ impl<Model: 'static + Component + View<Model>> PropertiesReceiver for Subcompone
     }
 }
 
-pub struct GtkState<Model: Component + View<Model>> {
+pub struct GtkState<Model: Component> {
     object: Widget,
     props: OrdMap<String, Value>,
     handlers: OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
@@ -231,7 +231,7 @@ where
     }
 }
 
-impl<Model: 'static + Component + View<Model>> GtkState<Model> {
+impl<Model: 'static + Component> GtkState<Model> {
     pub fn build(vobj: &VObject<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         let id = vobj
             .properties

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::callback::Callback;
-use crate::component::{Component, View};
+use crate::component::Component;
 use crate::scope::Scope;
 use crate::vdom::ComponentState;
 
@@ -52,8 +52,8 @@ pub struct VComponent<Model: Component> {
     pub activators: Vec<LazyActivator<Model>>,
 }
 
-impl<Model: 'static + Component + View<Model>> VComponent<Model> {
-    pub fn new<Child: 'static + Component + View<Child>>(
+impl<Model: 'static + Component> VComponent<Model> {
+    pub fn new<Child: 'static + Component>(
         props: Child::Properties,
         activators: Vec<LazyActivator<Model>>,
     ) -> Self {
@@ -92,7 +92,7 @@ impl<'a, Model: Component> PropTransform<Model, &'a str, String> for Vec<LazyAct
 
 impl<'a, Model, F, A> PropTransform<Model, F, Option<Callback<A>>> for Vec<LazyActivator<Model>>
 where
-    Model: Component + View<Model> + 'static,
+    Model: Component + 'static,
     F: Fn(A) -> Model::Message + 'static,
 {
     fn transform(&mut self, from: F) -> Option<Callback<A>> {

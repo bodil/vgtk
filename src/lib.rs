@@ -27,7 +27,7 @@ use gtk::Window;
 use crate::component::{ComponentMessage, ComponentTask};
 
 pub use crate::callback::Callback;
-pub use crate::component::{Component, View};
+pub use crate::component::Component;
 pub use crate::event::{Event, SignalHandler};
 pub use crate::mainloop::{GtkMainLoop, MainLoop};
 pub use crate::scope::Scope;
@@ -43,11 +43,7 @@ pub fn main_quit(return_code: i32) {
     MAIN_LOOP.with(|main_loop| main_loop.quit(return_code))
 }
 
-pub fn run<C: 'static + Component + View<C>>(
-    name: &str,
-    flags: ApplicationFlags,
-    _args: &[String],
-) -> i32 {
+pub fn run<C: 'static + Component>(name: &str, flags: ApplicationFlags, _args: &[String]) -> i32 {
     MAIN_LOOP.with(|main_loop| {
         let app = gtk::Application::new(name, flags).expect("Unable to create GtkApplication");
         let (_scope, channel, task) = ComponentTask::<C, C>::new(Default::default(), None, None);

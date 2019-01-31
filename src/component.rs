@@ -28,10 +28,8 @@ pub trait Component: Default {
     fn mounted(&mut self) {}
 
     fn unmounted(&mut self) {}
-}
 
-pub trait View<Model: Component> {
-    fn view(&self) -> VItem<Model>;
+    fn view(&self) -> VItem<Self>;
 }
 
 pub(crate) enum ComponentMessage<C: Component> {
@@ -54,8 +52,8 @@ impl<C: Component> Clone for ComponentMessage<C> {
 
 pub struct ComponentTask<C, P>
 where
-    C: Component + View<C>,
-    P: Component + View<P>,
+    C: Component,
+    P: Component,
 {
     scope: Scope<C>,
     parent_scope: Option<Scope<P>>,
@@ -66,8 +64,8 @@ where
 
 impl<C, P> ComponentTask<C, P>
 where
-    C: 'static + Component + View<C>,
-    P: Component + View<P>,
+    C: 'static + Component,
+    P: Component,
 {
     pub(crate) fn new(
         props: C::Properties,
@@ -109,8 +107,8 @@ where
 
 impl<C, P> Future for ComponentTask<C, P>
 where
-    C: 'static + Component + View<C>,
-    P: Component + View<P>,
+    C: 'static + Component,
+    P: Component,
 {
     type Item = ();
     type Error = Never;
