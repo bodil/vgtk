@@ -11,11 +11,11 @@ use std::rc::Rc;
 use im::ordmap::DiffItem;
 use im::{OrdMap, OrdSet};
 
-use crate::component::{Component, View};
+use crate::component::{Component, ComponentMessage, ComponentTask, View};
 use crate::event::SignalHandler;
 use crate::ffi;
 use crate::mainloop::MainLoop;
-use crate::scope::{ComponentMessage, ComponentTask, Scope};
+use crate::scope::Scope;
 use crate::vcomp::{AnyProps, VComponent};
 use crate::vitem::VItem;
 use crate::vobject::VObject;

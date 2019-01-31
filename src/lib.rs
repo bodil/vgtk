@@ -24,7 +24,7 @@ use glib::MainContext;
 use gtk::prelude::*;
 use gtk::Window;
 
-use crate::scope::{ComponentMessage, ComponentTask};
+use crate::component::{ComponentMessage, ComponentTask};
 
 pub use crate::callback::Callback;
 pub use crate::component::{Component, View};
