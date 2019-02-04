@@ -47,7 +47,7 @@ impl<C: Component + 'static> SignalHandler<C> {
     {
         let id = id.into();
         SignalHandler {
-            id: id,
+            id,
             handler_id: Cell::new(None),
             handler: Arc::new(f),
         }

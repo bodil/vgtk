@@ -1,11 +1,14 @@
+use crate::scope::AnyScope;
 use glib::futures::{
     channel::mpsc::{unbounded, UnboundedSender},
     task::Context,
-    Async, Future, Never, Poll, Stream, StreamExt,
+    task_local, Async, Future, Never, Poll, Stream, StreamExt,
 };
 use gtk::Container;
 use gtk::Widget;
+use std::sync::RwLock;
 
+use std::any::TypeId;
 use std::fmt::Debug;
 
 use crate::scope::Scope;
@@ -15,7 +18,7 @@ use crate::vitem::VItem;
 pub trait Component: Default {
     type Message: Clone + Send + Debug;
     type Properties: Clone + Default;
-    fn update(&mut self, msg: Self::Message) -> bool;
+    fn update(&mut self, context: &mut Context, msg: Self::Message) -> bool;
 
     fn create(_props: Self::Properties) -> Self {
         Self::default()
@@ -65,7 +68,7 @@ where
 impl<C, P> ComponentTask<C, P>
 where
     C: 'static + Component,
-    P: Component,
+    P: 'static + Component,
 {
     pub(crate) fn new(
         props: C::Properties,
@@ -100,26 +103,13 @@ where
         )
     }
 
-    pub fn widget(&self) -> Widget {
-        self.ui_state.object().clone()
-    }
-}
-
-impl<C, P> Future for ComponentTask<C, P>
-where
-    C: 'static + Component,
-    P: Component,
-{
-    type Item = ();
-    type Error = Never;
-
-    fn poll(&mut self, ctx: &mut Context) -> Poll<Self::Item, Self::Error> {
+    pub fn process(&mut self, ctx: &mut Context) -> Poll<(), Never> {
         let mut render = false;
         loop {
             match self.channel.poll_next(ctx) {
                 Ok(Async::Ready(Some(msg))) => match msg {
                     ComponentMessage::Update(msg) => {
-                        if self.state.update(msg) {
+                        if self.state.update(ctx, msg) {
                             render = true;
                         }
                     }
@@ -150,5 +140,44 @@ where
                 Err(e) => return Err(e),
             }
         }
+    }
+
+    pub fn widget(&self) -> Widget {
+        self.ui_state.object().clone()
+    }
+
+    pub(crate) fn current_parent(ctx: &mut Context) -> &'static Scope<C> {
+        let lock = PARENT_SCOPE.get_mut(ctx).read().unwrap();
+        match &*lock {
+            None => panic!("current task has no parent scope set!"),
+            Some(any_scope) => match any_scope.try_get::<C>() {
+                None => panic!(
+                    "unexpected type for current parent scope (expected {:?})",
+                    TypeId::of::<C::Properties>()
+                ),
+                Some(scope) => scope,
+            },
+        }
+    }
+}
+
+task_local! {
+    static PARENT_SCOPE: RwLock<Option<AnyScope>> = RwLock::new(None)
+}
+
+impl<C, P> Future for ComponentTask<C, P>
+where
+    C: 'static + Component,
+    P: 'static + Component,
+{
+    type Item = ();
+    type Error = Never;
+
+    fn poll(&mut self, ctx: &mut Context) -> Poll<Self::Item, Self::Error> {
+        *PARENT_SCOPE.get_mut(ctx).write().unwrap() =
+            self.parent_scope.clone().map(|scope| scope.into());
+        let polled = self.process(ctx);
+        *PARENT_SCOPE.get_mut(ctx).write().unwrap() = None;
+        polled
     }
 }

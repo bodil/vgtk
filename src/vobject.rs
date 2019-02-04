@@ -65,13 +65,13 @@ impl<Model: Component> VObject<Model> {
         if self.children.is_empty() {
             write!(f, "/>")
         } else {
-            write!(f, ">\n")?;
+            writeln!(f, ">")?;
             for child in &self.children {
                 match &**child {
                     VItem::Object(child) => child.debug_print(indent + 2, f)?,
                     VItem::Component(_) => write!(f, "Component")?,
                 }
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
             write!(f, "{: >indent$}</{}>", "", self.type_, indent = indent)
         }

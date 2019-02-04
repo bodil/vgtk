@@ -32,9 +32,6 @@ impl<Model: 'static + Component> State<Model> {
             VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
             VItem::Component(vcomp) => {
                 let comp = (vcomp.constructor)(&vcomp.props, parent, scope);
-                for activator in &vcomp.activators {
-                    activator.replace(Some(scope.clone()));
-                }
                 State::Component(comp)
             }
         }
@@ -117,12 +114,9 @@ impl<Model: 'static + Component> ComponentState<Model> {
         }
     }
 
-    pub fn patch(&mut self, spec: &VComponent<Model>, scope: &Scope<Model>) -> bool {
+    pub fn patch(&mut self, spec: &VComponent<Model>, _scope: &Scope<Model>) -> bool {
         if self.model_type == spec.model_type {
             // Components have same type; update props
-            for activator in &spec.activators {
-                activator.replace(Some(scope.clone()));
-            }
             self.state.update(&spec.props);
             true
         } else {

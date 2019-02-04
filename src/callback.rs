@@ -1,23 +1,13 @@
+use glib::futures::task::Context;
+
 use std::fmt::{Debug, Error, Formatter};
 use std::rc::Rc;
 
-pub struct Callback<A>(Rc<Fn(A)>);
+pub struct Callback<A>(pub(crate) Rc<Fn(&mut Context, A)>);
 
 impl<A: Debug> Callback<A> {
-    pub fn send(&self, value: A) {
-        (self.0)(value)
-    }
-}
-
-impl<A: Debug + 'static> Callback<A> {
-    pub fn comap<F, B>(self, f: F) -> Callback<B>
-    where
-        F: Fn(B) -> A + 'static,
-    {
-        Callback::from(move |input| {
-            let output = f(input);
-            self.clone().send(output);
-        })
+    pub fn send(&self, context: &mut Context, value: A) {
+        (self.0)(context, value)
     }
 }
 
@@ -39,7 +29,7 @@ impl<A> Debug for Callback<A> {
     }
 }
 
-impl<A, F: Fn(A) + 'static> From<F> for Callback<A> {
+impl<A, F: Fn(&mut Context, A) + 'static> From<F> for Callback<A> {
     fn from(func: F) -> Self {
         Callback(Rc::new(func))
     }

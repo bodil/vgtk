@@ -11,6 +11,7 @@ extern crate im;
 extern crate vgtk;
 
 use gio::ApplicationFlags;
+use glib::futures::task::Context;
 use gtk::prelude::*;
 use gtk::*;
 use vgtk::{run, Callback, Component, VItem};
@@ -42,12 +43,12 @@ impl Component for Radio {
         true
     }
 
-    fn update(&mut self, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &mut Context, msg: Self::Message) -> bool {
         match msg {
             RadioMsg::Selected(selected) => {
                 self.active = selected;
                 if let Some(ref callback) = self.on_changed {
-                    callback.send(self.active);
+                    callback.send(ctx, self.active);
                 }
             }
         }
@@ -154,7 +155,7 @@ impl Component for Model {
     type Message = Msg;
     type Properties = ();
 
-    fn update(&mut self, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &mut Context, msg: Self::Message) -> bool {
         let left = self.filter(Filter::Active).count();
         match msg {
             Msg::Add { item } => {
@@ -209,17 +210,8 @@ impl Component for Model {
                                 "Completed".to_string()
                             ],
                             active=Filter::index_for(self.filter),
-                            on_changed=|index| {
-                                Msg::Filter { filter: Filter::from_index(index) }
-                            }, />
-                        // <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
-                        //     <ToggleButton label="All", active=self.filter == Filter::All,
-                        //                   on toggled=|_| Msg::Filter { filter:Filter::All },/>
-                        //     <ToggleButton label="Active", active=self.filter == Filter::Active,
-                        //                   on toggled=|_| Msg::Filter { filter:Filter::Active },/>
-                        //     <ToggleButton label="Completed", active=self.filter == Filter::Completed,
-                        //                   on toggled=|_| Msg::Filter { filter:Filter::Completed },/>
-                        // </Box>
+                            on_changed=|index| Msg::Filter { filter: Filter::from_index(index) },
+                        />
                         {
                             self.filter(Filter::Completed).count() > 0 => gtk!{
                                 <Button label="Clear completed", pack_type=PackType::End,

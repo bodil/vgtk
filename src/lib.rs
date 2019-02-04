@@ -66,18 +66,19 @@ pub fn run<C: 'static + Component>(name: &str, flags: ApplicationFlags, _args: &
 #[macro_export]
 macro_rules! gtk {
     ( $stack:ident (< $class:ident : $($tail:tt)*)) => {
+        let mut vcomp = $crate::VComponent::new::<$class>();
         let mut props = <$class as Component>::Properties::default();
-        let mut activators = Vec::new();
-        gtk!{ @component props activators $class $stack ($($tail)*) }
+        gtk!{ @component vcomp props $class $stack ($($tail)*) }
     };
-    (@component $props:ident $act:ident $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
-        $props.$prop = $crate::vcomp::PropTransform::transform(&mut $act, $value);
-        gtk!{ @component $props $act $class $stack ($($tail)*) }
+    (@component $vcomp:ident $props:ident $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
+        $props.$prop = $crate::vcomp::PropTransform::transform(&$vcomp, $value);
+        gtk!{ @component $vcomp $props $class $stack ($($tail)*) }
     };
-    (@component $props:ident $act:ident $class:ident $stack:ident (/ > $($tail:tt)*)) => {
+    (@component $vcomp:ident $props:ident $class:ident $stack:ident (/ > $($tail:tt)*)) => {
+        $vcomp.set_props::<$class>($props);
         if !$stack.is_empty() {
             match $stack.last_mut().unwrap() {
-                $crate::VItem::Object(parent) => parent.add_child($crate::VItem::Component($crate::VComponent::new::<$class>($props, $act))),
+                $crate::VItem::Object(parent) => parent.add_child($crate::VItem::Component($vcomp)),
                 $crate::VItem::Component(_) => panic!("Components can't have children"),
             }
         } else {

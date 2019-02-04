@@ -1,7 +1,7 @@
+use glib::futures::task::Context;
 use gtk::Container;
 
 use std::any::{Any, TypeId};
-use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +18,14 @@ pub struct AnyProps {
 }
 
 impl AnyProps {
+    fn null() -> Self {
+        AnyProps {
+            valid: AtomicBool::new(false),
+            type_id: TypeId::of::<()>(),
+            data: std::ptr::null_mut(),
+        }
+    }
+
     pub fn new<Props: Any>(props: Props) -> Self {
         AnyProps {
             valid: AtomicBool::new(true),
@@ -42,70 +50,64 @@ impl AnyProps {
 }
 
 type Constructor<Model> = Fn(&AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
-type LazyActivator<Model> = Rc<RefCell<Option<Scope<Model>>>>;
 
 pub struct VComponent<Model: Component> {
     parent: PhantomData<Model>,
     pub model_type: TypeId,
     pub props: AnyProps,
     pub constructor: Box<Constructor<Model>>,
-    pub activators: Vec<LazyActivator<Model>>,
 }
 
 impl<Model: 'static + Component> VComponent<Model> {
-    pub fn new<Child: 'static + Component>(
-        props: Child::Properties,
-        activators: Vec<LazyActivator<Model>>,
-    ) -> Self {
+    pub fn new<Child: 'static + Component>() -> Self {
         let constructor: Box<Constructor<Model>> = Box::new(ComponentState::build::<Child>);
         VComponent {
             parent: PhantomData,
             model_type: TypeId::of::<Child>(),
-            props: AnyProps::new(props),
+            props: AnyProps::null(),
             constructor,
-            activators,
         }
+    }
+
+    pub fn set_props<Child: 'static + Component>(&mut self, props: Child::Properties) {
+        assert_eq!(self.model_type, TypeId::of::<Child>());
+        self.props = AnyProps::new(props);
     }
 }
 
 pub trait PropTransform<Model: Component, From, To> {
-    fn transform(&mut self, from: From) -> To;
+    fn transform(&self, from: From) -> To;
 }
 
-impl<Model: Component, A> PropTransform<Model, A, A> for Vec<LazyActivator<Model>> {
-    fn transform(&mut self, from: A) -> A {
+impl<Model: Component, A> PropTransform<Model, A, A> for VComponent<Model> {
+    fn transform(&self, from: A) -> A {
         from
     }
 }
 
-impl<'a, Model: Component, A: Clone> PropTransform<Model, &'a A, A> for Vec<LazyActivator<Model>> {
-    fn transform(&mut self, from: &'a A) -> A {
+impl<'a, Model: Component, A: Clone> PropTransform<Model, &'a A, A> for VComponent<Model> {
+    fn transform(&self, from: &'a A) -> A {
         from.clone()
     }
 }
 
-impl<'a, Model: Component> PropTransform<Model, &'a str, String> for Vec<LazyActivator<Model>> {
-    fn transform(&mut self, from: &'a str) -> String {
+impl<'a, Model: Component> PropTransform<Model, &'a str, String> for VComponent<Model> {
+    fn transform(&self, from: &'a str) -> String {
         from.to_string()
     }
 }
 
-impl<'a, Model, F, A> PropTransform<Model, F, Option<Callback<A>>> for Vec<LazyActivator<Model>>
+impl<Model, F, A> PropTransform<Model, F, Option<Callback<A>>> for VComponent<Model>
 where
     Model: Component + 'static,
     F: Fn(A) -> Model::Message + 'static,
 {
-    fn transform(&mut self, from: F) -> Option<Callback<A>> {
-        let cell = Rc::new(RefCell::new(None));
-        self.push(cell.clone());
-        let callback = move |arg| {
+    fn transform(&self, from: F) -> Option<Callback<A>> {
+        let callback: Rc<Fn(&mut Context, A)> = Rc::new(move |ctx, arg| {
             let msg = from(arg);
-            if let Some(ref mut sender) = *cell.borrow_mut() {
-                sender.send_message(msg);
-            } else {
-                panic!("callback was not initialised by component")
-            }
-        };
-        Some(callback.into())
+            let scope = Scope::<Model>::current_parent(ctx);
+            scope.send_message(msg);
+        });
+        Some(Callback(callback))
     }
 }
