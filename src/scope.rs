@@ -54,8 +54,8 @@ impl<C: 'static + Component> Scope<C> {
         self.muted.fetch_sub(1, Ordering::SeqCst);
     }
 
-    pub(crate) fn current_parent<'a>(ctx: &mut Context<'a>) -> &'a Self {
-        ComponentTask::<_, C>::current_parent(ctx)
+    pub(crate) fn current_parent<'a>(ctx: &mut Context<'a>) -> Self {
+        ComponentTask::<_, C>::current_parent_scope(ctx)
     }
 
     pub fn send_message(&self, msg: C::Message) {

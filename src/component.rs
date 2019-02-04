@@ -146,7 +146,7 @@ where
         self.ui_state.object().clone()
     }
 
-    pub(crate) fn current_parent(ctx: &mut Context) -> &'static Scope<C> {
+    pub(crate) fn current_parent_scope(ctx: &mut Context) -> Scope<C> {
         let lock = PARENT_SCOPE.get_mut(ctx).read().unwrap();
         match &*lock {
             None => panic!("current task has no parent scope set!"),
@@ -155,7 +155,7 @@ where
                     "unexpected type for current parent scope (expected {:?})",
                     TypeId::of::<C::Properties>()
                 ),
-                Some(scope) => scope,
+                Some(scope) => scope.clone(),
             },
         }
     }
