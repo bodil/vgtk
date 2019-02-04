@@ -4,7 +4,6 @@
 extern crate gio;
 extern crate glib;
 extern crate gtk;
-#[macro_use]
 extern crate im;
 
 #[macro_use]
@@ -16,7 +15,7 @@ use gtk::prelude::*;
 use gtk::*;
 use vgtk::{run, Callback, Component, VItem};
 
-use im::Vector;
+use im::{vector, Vector};
 
 #[derive(Clone, Debug, Default)]
 struct Radio {
