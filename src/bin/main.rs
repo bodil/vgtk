@@ -5,9 +5,17 @@ extern crate gio;
 extern crate glib;
 extern crate gtk;
 extern crate im;
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
 
 #[macro_use]
 extern crate vgtk;
+
+use std::fmt::{Debug, Display};
+
+use im::Vector;
+use strum::IntoEnumIterator;
 
 use gio::ApplicationFlags;
 use glib::futures::task::Context;
@@ -15,23 +23,31 @@ use gtk::prelude::*;
 use gtk::*;
 use vgtk::{run, Callback, Component, VItem};
 
-use im::{vector, Vector};
-
 #[derive(Clone, Debug, Default)]
-struct Radio {
-    labels: Vec<String>,
-    active: usize,
-    on_changed: Option<Callback<usize>>,
+struct Radio<Enum> {
+    active: Enum,
+    on_changed: Option<Callback<Enum>>,
 }
 
 #[derive(Clone, Debug)]
-enum RadioMsg {
-    Selected(usize),
+enum RadioMsg<Enum> {
+    Selected(Enum),
 }
 
-impl Component for Radio {
-    type Message = RadioMsg;
-    type Properties = Radio;
+impl<Enum, I> Component for Radio<Enum>
+where
+    Enum: 'static
+        + IntoEnumIterator<Iterator = I>
+        + Display
+        + PartialEq
+        + Debug
+        + Default
+        + Clone
+        + Send,
+    I: Iterator<Item = Enum>,
+{
+    type Message = RadioMsg<Enum>;
+    type Properties = Self;
 
     fn create(props: Self::Properties) -> Self {
         props
@@ -47,20 +63,20 @@ impl Component for Radio {
             RadioMsg::Selected(selected) => {
                 self.active = selected;
                 if let Some(ref callback) = self.on_changed {
-                    callback.send(ctx, self.active);
+                    callback.send(ctx, self.active.clone());
                 }
             }
         }
         true
     }
 
-    fn view(&self) -> VItem<Radio> {
+    fn view(&self) -> VItem<Radio<Enum>> {
         gtk! {
             <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
-                { for self.labels.iter().enumerate().map(|(index, label)| {
+                { for Enum::iter().map(|label| {
                     gtk!{
-                        <ToggleButton label=label, active=index == self.active,
-                                      on toggled=|_| RadioMsg::Selected(index),/>
+                        <ToggleButton label=label.to_string(), active=label == self.active,
+                                      on toggled=|_| RadioMsg::Selected(label.clone()),/>
                     }
                 }) }
             </Box>
@@ -68,29 +84,17 @@ impl Component for Radio {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Display, EnumIter)]
+#[repr(u32)]
 enum Filter {
     All,
     Active,
     Completed,
 }
 
-impl Filter {
-    fn from_index(index: usize) -> Self {
-        match index {
-            0 => Filter::All,
-            1 => Filter::Active,
-            2 => Filter::Completed,
-            _ => panic!(),
-        }
-    }
-
-    fn index_for(filter: Self) -> usize {
-        match filter {
-            Filter::All => 0,
-            Filter::Active => 1,
-            Filter::Completed => 2,
-        }
+impl Default for Filter {
+    fn default() -> Self {
+        Filter::All
     }
 }
 
@@ -101,8 +105,11 @@ struct Item {
 }
 
 impl Item {
-    fn new(label: String) -> Self {
-        Item { label, done: false }
+    fn new<S: Into<String>>(label: S) -> Self {
+        Item {
+            label: label.into(),
+            done: false,
+        }
     }
 }
 
@@ -115,7 +122,7 @@ struct Model {
 impl Default for Model {
     fn default() -> Self {
         Model {
-            items: vector![Item::new("foo".to_string()), Item::new("bar".to_string())],
+            items: ["foo", "bar"].iter().cloned().map(Item::new).collect(),
             filter: Filter::All,
         }
     }
@@ -202,15 +209,7 @@ impl Component for Model {
                     </ScrolledWindow>
                     <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
                         <Label label=self.left_label(),/>
-                        <Radio:
-                            labels=vec![
-                                "All".to_string(),
-                                "Active".to_string(),
-                                "Completed".to_string()
-                            ],
-                            active=Filter::index_for(self.filter),
-                            on_changed=|index| Msg::Filter { filter: Filter::from_index(index) },
-                        />
+                        <Radio<Filter>: active=self.filter, on_changed=|filter| Msg::Filter { filter }, />
                         {
                             self.filter(Filter::Completed).count() > 0 => gtk!{
                                 <Button label="Clear completed", pack_type=PackType::End,
@@ -248,7 +247,7 @@ fn render_item(index: usize, item: &Item) -> VItem<Model> {
 
 fn main() {
     let args: Vec<String> = ::std::env::args().collect();
-    ::std::process::exit(run::<Model>(
+    std::process::exit(run::<Model>(
         "camp.lol.updog",
         ApplicationFlags::empty(),
         &args,

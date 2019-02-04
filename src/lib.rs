@@ -65,16 +65,16 @@ pub fn run<C: 'static + Component>(name: &str, flags: ApplicationFlags, _args: &
 
 #[macro_export]
 macro_rules! gtk {
-    ( $stack:ident (< $class:ident : $($tail:tt)*)) => {
+    ( $stack:ident (< $class:ty : $($tail:tt)*)) => {
         let mut vcomp = $crate::VComponent::new::<$class>();
         let mut props = <$class as Component>::Properties::default();
-        gtk!{ @component vcomp props $class $stack ($($tail)*) }
+        gtk!{ @component vcomp props $stack ($class) ($($tail)*) }
     };
-    (@component $vcomp:ident $props:ident $class:ident $stack:ident ( $prop:ident = $value:expr, $($tail:tt)* )) => {
+    (@component $vcomp:ident $props:ident $stack:ident ($class:ty) ( $prop:ident = $value:expr, $($tail:tt)* )) => {
         $props.$prop = $crate::vcomp::PropTransform::transform(&$vcomp, $value);
-        gtk!{ @component $vcomp $props $class $stack ($($tail)*) }
+        gtk!{ @component $vcomp $props $stack ($class) ($($tail)*) }
     };
-    (@component $vcomp:ident $props:ident $class:ident $stack:ident (/ > $($tail:tt)*)) => {
+    (@component $vcomp:ident $props:ident $stack:ident ($class:ty) (/ > $($tail:tt)*)) => {
         $vcomp.set_props::<$class>($props);
         if !$stack.is_empty() {
             match $stack.last_mut().unwrap() {
