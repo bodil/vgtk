@@ -1,11 +1,3 @@
-extern crate gio;
-extern crate glib;
-extern crate glib_sys as glib_ffi;
-extern crate gobject_sys as gobject_ffi;
-extern crate gtk;
-extern crate gtk_sys as gtk_ffi;
-extern crate im;
-
 mod callback;
 mod component;
 mod event;
@@ -18,7 +10,7 @@ mod vitem;
 mod vobject;
 
 use gio::prelude::*;
-use gio::ApplicationFlags;
+use gio::{ApplicationFlags, Cancellable};
 use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
@@ -57,7 +49,8 @@ pub fn run<C: 'static + Component>(name: &str, flags: ApplicationFlags, _args: &
             channel.unbounded_send(ComponentMessage::Mounted).unwrap();
         });
         app.set_default();
-        app.register(None).expect("application already running");
+        app.register(None as Option<&Cancellable>)
+            .expect("application already running");
         app.activate();
         main_loop.run()
     })

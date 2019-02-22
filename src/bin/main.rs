@@ -195,7 +195,7 @@ impl Component for Model {
                                expand=true, fill=true,
                                on activate=|e| {
                                    let entry: Entry = e.source.downcast().unwrap();
-                                   let label = entry.get_text().unwrap_or_default();
+                                   let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
                                    entry.select_region(0, label.len() as i32);
                                    Msg::Add {
                                        item: label
