@@ -174,8 +174,7 @@ where
     type Error = Never;
 
     fn poll(&mut self, ctx: &mut Context) -> Poll<Self::Item, Self::Error> {
-        *PARENT_SCOPE.get_mut(ctx).write().unwrap() =
-            self.parent_scope.clone().map(|scope| scope.into());
+        *PARENT_SCOPE.get_mut(ctx).write().unwrap() = self.parent_scope.clone().map(Into::into);
         let polled = self.process(ctx);
         *PARENT_SCOPE.get_mut(ctx).write().unwrap() = None;
         polled

@@ -185,7 +185,7 @@ where
 
     // Handle special case hacks
     if let ("image", Some(name)) = (prop, value.get::<String>()) {
-        value = Image::new_from_icon_name(name.as_str(), IconSize::Button.into()).to_value();
+        value = Image::new_from_icon_name(name.as_str(), IconSize::Button).to_value();
     }
 
     // Attempt to set a property on the current object
