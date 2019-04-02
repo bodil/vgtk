@@ -1,24 +1,21 @@
 use glib::futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
+use glib::SignalHandlerId;
 use glib::{Object, Type, Value};
 use gtk::prelude::*;
 use gtk::{self, Builder, Container, IconSize, Image, Widget, Window};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use std::any::TypeId;
 use std::marker::PhantomData;
-use std::rc::Rc;
-
-use im::ordmap::DiffItem;
-use im::{OrdMap, OrdSet};
 
 use crate::component::{Component, ComponentMessage, ComponentTask};
-use crate::event::SignalHandler;
 use crate::ffi;
 use crate::mainloop::MainLoop;
 use crate::scope::Scope;
-use crate::vcomp::{AnyProps, VComponent};
-use crate::vitem::VItem;
-use crate::vobject::VObject;
+use crate::vcomp::AnyProps;
+use crate::vnode::{VComponent, VHandler, VNode, VProperty, VWidget};
 
 pub enum State<Model: Component> {
     Gtk(GtkState<Model>),
@@ -27,10 +24,10 @@ pub enum State<Model: Component> {
 
 impl<Model: 'static + Component> State<Model> {
     /// Build a state from a `VItem` spec.
-    pub fn build(vitem: &VItem<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
-        match vitem {
-            VItem::Object(vobj) => State::Gtk(GtkState::build(vobj, parent, scope)),
-            VItem::Component(vcomp) => {
+    pub fn build(vnode: &VNode<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+        match vnode {
+            VNode::Widget(widget) => State::Gtk(GtkState::build(widget, parent, scope)),
+            VNode::Component(vcomp) => {
                 let comp = (vcomp.constructor)(&vcomp.props, parent, scope);
                 State::Component(comp)
             }
@@ -43,16 +40,16 @@ impl<Model: 'static + Component> State<Model> {
     #[must_use]
     pub fn patch(
         &mut self,
-        vitem: &VItem<Model>,
+        vnode: &VNode<Model>,
         parent: Option<&Container>,
         scope: &Scope<Model>,
     ) -> bool {
-        match vitem {
-            VItem::Object(vobj) => match self {
-                State::Gtk(state) => state.patch(vobj, parent, scope),
+        match vnode {
+            VNode::Widget(widget) => match self {
+                State::Gtk(state) => state.patch(widget, parent, scope),
                 State::Component(_) => false,
             },
-            VItem::Component(vcomp) => match self {
+            VNode::Component(vcomp) => match self {
                 State::Component(state) => state.patch(vcomp, scope),
                 State::Gtk(_) => false,
             },
@@ -68,13 +65,13 @@ impl<Model: 'static + Component> State<Model> {
     }
 }
 
-fn build_obj<A: IsA<Object>>(class: Type, id: Option<&str>) -> A {
+fn build_obj<A: IsA<Object>>(class: Type) -> A {
     let mut ui = String::new();
     ui += &format!("<interface><object class=\"{}\"", class);
-    if let Some(id) = id {
-        // TODO escape this string y'all
-        ui += &format!(" id=\"{}\"", id);
-    }
+    // if let Some(id) = id {
+    //     // TODO escape this string y'all
+    //     ui += &format!(" id=\"{}\"", id);
+    // }
     ui += "/></interface>";
 
     let builder = Builder::new_from_string(&ui);
@@ -163,77 +160,16 @@ impl<Model: 'static + Component> PropertiesReceiver for SubcomponentState<Model>
 
 pub struct GtkState<Model: Component> {
     object: Widget,
-    props: OrdMap<String, Value>,
-    handlers: OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
+    handlers: HashMap<(&'static str, &'static str), SignalHandlerId>,
     children: Vec<State<Model>>,
 }
 
-fn eq_values(left: &Value, right: &Value) -> bool {
-    if left.type_() != right.type_() {
-        return false;
-    }
-    // This is painful, but what can you do
-    format!("{:?}", left) == format!("{:?}", right)
-}
-
-fn set_property<O, P>(object: &O, parent: Option<&P>, prop: &str, mut value: Value)
-where
-    O: IsA<Widget> + Cast,
-    P: IsA<Container> + Cast,
-{
-    let object: &Widget = object.upcast_ref();
-
-    // Handle special case hacks
-    if let ("image", Some(name)) = (prop, value.get::<String>()) {
-        value = Image::new_from_icon_name(name.as_str(), IconSize::Button).to_value();
-    }
-
-    // Attempt to set a property on the current object
-    if let Err(e) = object.set_property(prop, &value) {
-        // If that fails, try it as a child property of the parent, if we have one
-        if let Some(parent) = parent {
-            let parent: &Container = parent.upcast_ref();
-            match ffi::set_child_property(parent, &object, prop, &value) {
-                Ok(_) => (),
-                Err(e) => {
-                    // Handle custom child properties
-                    if prop == "center"
-                        && value.to_value().get::<bool>() == Some(true)
-                        && parent.is::<gtk::Box>()
-                    {
-                        let parent = parent.downcast_ref::<gtk::Box>().unwrap();
-                        parent.remove(object);
-                        parent.set_center_widget(object);
-                    } else {
-                        panic!(
-                            "invalid property {:?} for {}: {:?}",
-                            prop,
-                            object.get_type(),
-                            e
-                        );
-                    }
-                }
-            }
-        } else {
-            panic!(
-                "invalid property {:?} for {}: {:?}",
-                prop,
-                object.get_type(),
-                e
-            )
-        }
-    }
-}
-
 impl<Model: 'static + Component> GtkState<Model> {
-    pub fn build(vobj: &VObject<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
-        let id = vobj
-            .properties
-            .get("id")
-            .map(|v| v.get::<String>().expect("id property is not a string"));
+    pub fn build(vobj: &VWidget<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+        // let id = vobj.get_prop("id");
 
         // Build this object
-        let object = build_obj::<Widget>(vobj.type_, id.as_ref().map(String::as_str));
+        let object = build_obj::<Widget>(vobj.object_type);
         // println!("Built {}", object.get_type());
 
         // Add to parent
@@ -242,23 +178,22 @@ impl<Model: 'static + Component> GtkState<Model> {
         }
 
         // Apply properties
-        for (prop, value) in &vobj.properties {
-            if prop != "id" {
-                set_property(&object, parent, prop, value.to_owned());
-            }
+        for prop in &vobj.properties {
+            // if prop.name != "id" {
+            (prop.set)(object.upcast_ref(), true);
+            // }
         }
 
         // Apply handlers
-        for (signal, handlers) in &vobj.handlers {
-            for handler in handlers {
-                handler.connect(signal.as_str(), object.upcast_ref(), scope.clone());
-            }
+        let mut handlers = HashMap::new();
+        for handler in &vobj.handlers {
+            let handle = (handler.set)(object.upcast_ref(), scope);
+            handlers.insert((handler.name, handler.id), handle);
         }
 
         let mut state = GtkState {
             object: object.clone(),
-            props: vobj.properties.clone(),
-            handlers: vobj.handlers.clone(),
+            handlers,
             children: Vec::new(),
         };
 
@@ -270,7 +205,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                         let header =
                             State::build(&vobj.children[0], Some(window.upcast_ref()), scope);
                         window.remove(header.object());
-                        window.set_titlebar(header.object());
+                        window.set_titlebar(Some(header.object()));
                         state.children.push(header);
                         let body =
                             State::build(&vobj.children[1], Some(window.upcast_ref()), scope);
@@ -294,7 +229,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                     state.children.push(child);
                 }
             } else {
-                panic!("non-Container cannot have children: {}", vobj.type_);
+                panic!("non-Container cannot have children: {}", vobj.object_type);
             }
         }
 
@@ -306,7 +241,7 @@ impl<Model: 'static + Component> GtkState<Model> {
 
     pub fn patch(
         &mut self,
-        vobj: &VObject<Model>,
+        vobj: &VWidget<Model>,
         parent: Option<&Container>,
         scope: &Scope<Model>,
     ) -> bool {
@@ -318,13 +253,13 @@ impl<Model: 'static + Component> GtkState<Model> {
             for index in 0..(self.children.len().max(vobj.children.len())) {
                 match (self.children.get_mut(index), vobj.children.get(index)) {
                     (Some(State::Component(target)), Some(spec_item)) => {
-                        match **spec_item {
-                            VItem::Object(_) => {
+                        match spec_item {
+                            VNode::Widget(_) => {
                                 // Component has become a widget; reconstruct from here
                                 reconstruct_from = Some(index);
                                 break;
                             }
-                            VItem::Component(ref spec) => {
+                            VNode::Component(ref spec) => {
                                 if !target.patch(spec, scope) {
                                     reconstruct_from = Some(index);
                                     break;
@@ -333,9 +268,9 @@ impl<Model: 'static + Component> GtkState<Model> {
                         }
                     }
                     (Some(State::Gtk(target)), Some(spec_item)) => {
-                        match **spec_item {
-                            VItem::Object(ref spec) => {
-                                if target.object.get_type() == spec.type_ {
+                        match spec_item {
+                            VNode::Widget(ref spec) => {
+                                if target.object.get_type() == spec.object_type {
                                     // Objects have same type; patch down
                                     target.patch(spec, Some(&parent), scope);
                                 } else {
@@ -344,7 +279,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                                     break;
                                 }
                             }
-                            VItem::Component(_) => {
+                            VNode::Component(_) => {
                                 // Gtk object has turned into a component; reconstruct from here
                                 reconstruct_from = Some(index);
                                 break;
@@ -367,7 +302,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                             (parent.downcast_ref::<Window>(), index, vobj.children.len())
                         {
                             window.remove(state.object());
-                            window.set_titlebar(state.object());
+                            window.set_titlebar(Some(state.object()));
                         }
                         to_append.push(state);
                     }
@@ -418,70 +353,32 @@ impl<Model: 'static + Component> GtkState<Model> {
         true
     }
 
-    fn patch_properties(&mut self, properties: &OrdMap<String, Value>, parent: Option<&Container>) {
-        for (prop, value) in properties {
-            if prop != "id" {
-                match self.props.get(prop) {
-                    Some(old_value) => {
-                        if !eq_values(old_value, value) {
-                            set_property(&self.object, parent, prop, value.clone());
-                        }
-                    }
-                    None => set_property(&self.object, parent, prop, value.clone()),
-                }
-            }
+    fn patch_properties(&mut self, properties: &Vec<VProperty>, parent: Option<&Container>) {
+        for prop in properties {
+            (prop.set)(self.object.upcast_ref(), false);
         }
-        self.props = properties.clone();
     }
 
-    fn patch_handlers(
-        &mut self,
-        handlers: &OrdMap<String, OrdSet<Rc<SignalHandler<Model>>>>,
-        scope: &Scope<Model>,
-    ) {
-        for signal_action in handlers.diff(&self.handlers) {
-            match signal_action {
-                DiffItem::Add((signal, handlers)) => {
-                    for handler in handlers {
-                        handler.connect(signal.as_str(), self.object.upcast_ref(), scope.clone());
-                    }
-                }
-                DiffItem::Remove((_, handlers)) => {
-                    for handler in handlers {
-                        handler.disconnect(self.object.upcast_ref());
-                    }
-                }
-                DiffItem::Update {
-                    old: (old_signal, old_handlers),
-                    new: (signal, handlers),
-                } => {
-                    debug_assert_eq!(old_signal, signal);
-                    for action in handlers.diff(old_handlers) {
-                        match action {
-                            DiffItem::Add(handler) => handler.connect(
-                                signal.as_str(),
-                                self.object.upcast_ref(),
-                                scope.clone(),
-                            ),
-                            DiffItem::Remove(handler) => {
-                                handler.disconnect(self.object.upcast_ref())
-                            }
-                            DiffItem::Update {
-                                old: old_handler,
-                                new: new_handler,
-                            } => {
-                                old_handler.disconnect(self.object.upcast_ref());
-                                new_handler.connect(
-                                    signal.as_str(),
-                                    self.object.upcast_ref(),
-                                    scope.clone(),
-                                )
-                            }
-                        }
-                    }
-                }
+    fn patch_handlers(&mut self, handlers: &Vec<VHandler<Model>>, scope: &Scope<Model>) {
+        // FIXME need to store and match IDs
+        let mut seen = HashSet::new();
+        let mut remove = Vec::new();
+        for handler in handlers {
+            let key = (handler.name, handler.id);
+            seen.insert(key.clone());
+            if !self.handlers.contains_key(&key) {
+                let handle = (handler.set)(self.object.upcast_ref(), scope);
+                self.handlers.insert(key, handle);
             }
         }
-        self.handlers = handlers.clone();
+        for key in self.handlers.keys() {
+            if !seen.contains(key) {
+                remove.push(key.clone());
+            }
+        }
+        for key in remove {
+            let obj: &Object = self.object.upcast_ref();
+            obj.disconnect(self.handlers.remove(&key).unwrap());
+        }
     }
 }

@@ -1,5 +1,4 @@
 use glib::futures::channel::mpsc::UnboundedSender;
-use glib::futures::task::Context;
 use std::sync::atomic::AtomicPtr;
 
 use std::any::TypeId;
@@ -54,8 +53,8 @@ impl<C: 'static + Component> Scope<C> {
         self.muted.fetch_sub(1, Ordering::SeqCst);
     }
 
-    pub(crate) fn current_parent<'a>(ctx: &mut Context<'a>) -> Self {
-        ComponentTask::<_, C>::current_parent_scope(ctx)
+    pub(crate) fn current_parent<'a>() -> Self {
+        ComponentTask::<_, C>::current_parent_scope()
     }
 
     pub fn send_message(&self, msg: C::Message) {
@@ -71,7 +70,7 @@ impl<C: 'static + Component> Scope<C> {
 pub struct AnyScope {
     type_id: TypeId,
     ptr: AtomicPtr<()>,
-    drop: Box<Fn(&mut AtomicPtr<()>) + Send>,
+    drop: Box<dyn Fn(&mut AtomicPtr<()>) + Send>,
 }
 
 impl<C: 'static + Component> From<Scope<C>> for AnyScope {

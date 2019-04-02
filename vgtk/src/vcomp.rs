@@ -1,4 +1,3 @@
-use glib::futures::task::Context;
 use gtk::Container;
 
 use std::any::{Any, TypeId};
@@ -49,7 +48,8 @@ impl AnyProps {
     }
 }
 
-type Constructor<Model> = Fn(&AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
+type Constructor<Model> =
+    dyn Fn(&AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
 
 pub struct VComponent<Model: Component> {
     parent: PhantomData<Model>,
@@ -103,9 +103,9 @@ where
     F: Fn(A) -> Model::Message + 'static,
 {
     fn transform(&self, from: F) -> Option<Callback<A>> {
-        let callback: Rc<Fn(&mut Context, A)> = Rc::new(move |ctx, arg| {
+        let callback: Rc<dyn Fn(A)> = Rc::new(move |arg| {
             let msg = from(arg);
-            let scope = Scope::<Model>::current_parent(ctx);
+            let scope = Scope::<Model>::current_parent();
             scope.send_message(msg);
         });
         Some(Callback(callback))

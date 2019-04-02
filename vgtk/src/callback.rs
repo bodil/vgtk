@@ -1,13 +1,11 @@
-use glib::futures::task::Context;
-
 use std::fmt::{Debug, Error, Formatter};
 use std::rc::Rc;
 
-pub struct Callback<A>(pub(crate) Rc<Fn(&mut Context, A)>);
+pub struct Callback<A>(pub(crate) Rc<dyn Fn(A)>);
 
 impl<A: Debug> Callback<A> {
-    pub fn send(&self, context: &mut Context, value: A) {
-        (self.0)(context, value)
+    pub fn send(&self, value: A) {
+        (self.0)(value)
     }
 }
 
@@ -29,7 +27,7 @@ impl<A> Debug for Callback<A> {
     }
 }
 
-impl<A, F: Fn(&mut Context, A) + 'static> From<F> for Callback<A> {
+impl<A, F: Fn(A) + 'static> From<F> for Callback<A> {
     fn from(func: F) -> Self {
         Callback(Rc::new(func))
     }
