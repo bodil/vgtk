@@ -1,3 +1,4 @@
-/Cargo.lock
-/target
+Cargo.lock
+target/
 **/*.rs.bk
+macroexpand.log

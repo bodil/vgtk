@@ -1,5 +1,5 @@
 #![recursion_limit = "16384"]
-#![allow(clippy::cyclomatic_complexity)]
+#![allow(clippy::cognitive_complexity)]
 
 extern crate gio;
 extern crate glib;
@@ -21,7 +21,7 @@ use gio::ApplicationFlags;
 use glib::futures::task::Context;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{run, Callback, Component, VItem};
+use vgtk::{go, Callback, Component, VItem};
 
 #[derive(Clone, Debug, Default)]
 struct Radio<Enum> {
@@ -246,10 +246,5 @@ fn render_item(index: usize, item: &Item) -> VItem<Model> {
 }
 
 fn main() {
-    let args: Vec<String> = ::std::env::args().collect();
-    std::process::exit(run::<Model>(
-        "camp.lol.updog",
-        ApplicationFlags::empty(),
-        &args,
-    ));
+    std::process::exit(go::<Model>("camp.lol.updog", ApplicationFlags::empty()));
 }

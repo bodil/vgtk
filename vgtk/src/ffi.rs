@@ -33,7 +33,7 @@ pub fn set_child_property<'a, P: Into<&'a str>>(
     parent: &Container,
     child: &Widget,
     prop: P,
-    value: &ToValue,
+    value: &dyn ToValue,
 ) -> Result<(), BoolError> {
     let prop = prop.into();
     let value = value.to_value();

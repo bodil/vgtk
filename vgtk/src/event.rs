@@ -16,7 +16,7 @@ pub struct Event {
 pub struct SignalHandler<C: Component> {
     id: String,
     handler_id: Cell<Option<SignalHandlerId>>,
-    handler: Arc<Fn(Event) -> C::Message>,
+    handler: Arc<dyn Fn(Event) -> C::Message>,
 }
 
 impl<C: Component> PartialEq for SignalHandler<C> {
@@ -57,7 +57,7 @@ impl<C: Component + 'static> SignalHandler<C> {
         let signal = signal.into();
         let handler = self.handler.clone();
 
-        let f: Arc<Fn(Event) -> C::Message + Send + Sync + 'static> =
+        let f: Arc<dyn Fn(Event) -> C::Message + Send + Sync + 'static> =
             unsafe { Arc::from_raw(Arc::into_raw(handler) as *mut _) };
 
         self.handler_id.set(Some(
