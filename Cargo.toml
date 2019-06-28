@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 gio = "0.6.0"
 glib-sys = "0.8.0"
-gtk-sys = "0.8.0"
+gtk-sys = "0.9.0"
 gobject-sys = "0.8.0"
 im = "12.0.0"
 glib = "0.7.0"
