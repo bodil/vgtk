@@ -5,7 +5,7 @@ authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 
 [dependencies]
-gio = "0.6.0"
+gio = "0.7.0"
 glib-sys = "0.8.0"
 gtk-sys = "0.8.0"
 gobject-sys = "0.8.0"
