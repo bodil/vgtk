@@ -19,7 +19,7 @@ use crate::vnode::VNode;
 pub trait Component: Default + Unpin {
     type Message: Clone + Send + Debug;
     type Properties: Clone + Default;
-    fn update(&mut self, context: &mut Context, msg: Self::Message) -> bool;
+    fn update(&mut self, msg: Self::Message) -> bool;
 
     fn create(_props: Self::Properties) -> Self {
         Self::default()
@@ -113,7 +113,7 @@ where
             match Stream::poll_next(self.channel.as_mut(), ctx) {
                 Poll::Ready(Some(msg)) => match msg {
                     ComponentMessage::Update(msg) => {
-                        if self.state.update(ctx, msg) {
+                        if self.state.update(msg) {
                             render = true;
                         }
                     }

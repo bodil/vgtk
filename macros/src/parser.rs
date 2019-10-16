@@ -89,28 +89,6 @@ pub fn group<'a>() -> impl Parser<'a, Token, Group> {
     }
 }
 
-// pub fn group_open<'a>(name: Delimiter) -> impl Parser<'a, Token, Token> {
-//     move |input: &Cursor<'a, Token>| match input.get() {
-//         Some(Token::GroupOpen(delimiter, span)) if delimiter == &name => ok(
-//             Token::GroupOpen(delimiter.clone(), span.clone()),
-//             input,
-//             input.next(),
-//         ),
-//         _ => err(input, format!("\"{}\"", render_delim(name, false))),
-//     }
-// }
-//
-// pub fn group_close<'a>(name: Delimiter) -> impl Parser<'a, Token, Token> {
-//     move |input: &Cursor<'a, Token>| match input.get() {
-//         Some(Token::GroupClose(delimiter, span)) if delimiter == &name => ok(
-//             Token::GroupClose(delimiter.clone(), span.clone()),
-//             input,
-//             input.next(),
-//         ),
-//         _ => err(input, format!("\"{}\"", render_delim(name, true))),
-//     }
-// }
-
 pub fn rust_expr<'a>() -> impl Parser<'a, Token, Vec<Token>> {
     // TODO: currently only accepts literals, identifiers and blocks. JSX only
     // accepts strings and blocks, but I feel we could make more of an effort to
@@ -120,12 +98,12 @@ pub fn rust_expr<'a>() -> impl Parser<'a, Token, Vec<Token>> {
         | ident().map(|i| vec![i.into()])
 }
 
-pub fn fn_args<'a>() -> impl Parser<'a, Token, Vec<Token>> {
+pub fn closure_args<'a>() -> impl Parser<'a, Token, Vec<Token>> {
     punct('|').right(expect(any(not_punct('|')).left(punct('|'))))
 }
 
 pub fn closure<'a>() -> impl Parser<'a, Token, (Vec<Token>, Vec<Token>)> {
-    fn_args().pair(expect(rust_expr()))
+    closure_args().pair(expect(rust_expr()))
 }
 
 pub fn property_attr<'a>() -> impl Parser<'a, Token, Attribute> {
@@ -207,6 +185,7 @@ pub fn component<'a>() -> impl Parser<'a, Token, GtkComponent> {
 pub fn element<'a>() -> impl Parser<'a, Token, GtkElement> {
     component().map(|component| GtkElement::Component(component))
         | widget().map(|widget| GtkElement::Widget(widget))
+        | group().map(|group| GtkElement::Block(group))
 }
 
 #[cfg(test)]
