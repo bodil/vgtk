@@ -29,6 +29,10 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
+      - name: Update packages
+        run: sudo apt-get update
+      - name: Install Gtk build environment
+        run: sudo apt-get install -y libgtk-3-dev
       - uses: hecrj/setup-rust-action@v1
         with:
           rust-version: stable
