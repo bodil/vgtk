@@ -13,7 +13,7 @@ pub struct GtkWidget {
 
 #[derive(Debug, Clone)]
 pub struct GtkComponent {
-    pub name: Ident,
+    pub name: Vec<Token>,
     pub attributes: Vec<Attribute>,
 }
 
