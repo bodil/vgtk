@@ -29,7 +29,7 @@ pub fn expand_gtk(gtk: &GtkElement) -> TokenStream {
 }
 
 pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
-    let name = &gtk.name;
+    let name = to_stream(&gtk.name);
     let mut out = quote!(
         use vgtk::{Component, vcomp::{VComponent, PropTransform}};
         let mut vcomp = VComponent::new::<#name>();

@@ -169,9 +169,44 @@ pub fn widget<'a>() -> impl Parser<'a, Token, GtkWidget> {
     })
 }
 
+pub fn rust_type_path<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Vec<Token>> {
+    sep_by(
+        ident().map(|i| vec![i.into()]),
+        punct(':')
+            .pair(punct(':'))
+            .map(|(l, r)| vec![l.into(), r.into()]),
+    )
+    .map(|v| v.into_iter().flatten().collect())
+    .parse(input)
+}
+
+pub fn rust_type_list<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Vec<Token>> {
+    sep_by(rust_type, punct(',').map(|p| vec![p.into()]))
+        .map(|v| v.into_iter().flatten().collect())
+        .parse(input)
+}
+
+pub fn rust_type_args<'a>() -> impl Parser<'a, Token, Vec<Token>> {
+    punct('<')
+        .pair(expect(rust_type_list.pair(punct('>'))))
+        .map(|(l, (mut body, r))| {
+            body.insert(0, l.into());
+            body.push(r.into());
+            body
+        })
+}
+
+pub fn rust_type<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Vec<Token>> {
+    (rust_type_path.pair(rust_type_args()).map(|(mut l, r)| {
+        l.extend(r);
+        l
+    }) | rust_type_path)
+        .parse(input)
+}
+
 pub fn component<'a>() -> impl Parser<'a, Token, GtkComponent> {
     let open =
-        punct('<').right(punct('@').right(ident().pair(property_attr().repeat(0..)).expect()));
+        punct('<').right(punct('@').right(rust_type.pair(property_attr().repeat(0..)).expect()));
     open.and_then(move |(name, attributes)| {
         punct('/')
             .left(punct('>').expect())
@@ -208,6 +243,21 @@ mod test {
             }
             _ => panic!("expected GtkWidget"),
         }
+    }
+
+    #[test]
+    fn parse_type() {
+        let stream = unroll_stream(quote!(Node<Foo::Model, Foo::Bar::View<S, T, A, B>>), false);
+        match rust_type.parse(&stream.cursor()) {
+            Ok(Success { value: tokens, .. }) => {
+                let text = crate::lexer::to_stream(tokens.iter()).to_string();
+                assert_eq!(
+                    "Node < Foo :: Model , Foo :: Bar :: View < S , T , A , B >>",
+                    text
+                );
+            }
+            Err(err) => panic!("failed to parse: {:?}", err),
+        };
     }
 
     #[test]
