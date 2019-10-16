@@ -1,5 +1,3 @@
-#![feature(async_closure)]
-
 mod callback;
 mod component;
 mod event;
@@ -12,7 +10,7 @@ pub mod vnode;
 
 use proc_macro_hack::proc_macro_hack;
 
-#[proc_macro_hack]
+#[proc_macro_hack(support_nested)]
 pub use vgtk_macros::gtk;
 
 use std::cell::Cell;

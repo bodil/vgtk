@@ -11,6 +11,14 @@ pub enum VNode<Model: Component> {
     Component(VComponent<Model>),
 }
 
+impl<Model: Component> IntoIterator for VNode<Model> {
+    type Item = VNode<Model>;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
+    }
+}
+
 pub struct VWidget<Model: Component> {
     pub object_type: Type,
     pub properties: Vec<VProperty>,

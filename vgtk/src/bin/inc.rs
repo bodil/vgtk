@@ -1,5 +1,3 @@
-#![recursion_limit = "16384"]
-
 use gio::ApplicationFlags;
 use glib::futures::task::Context;
 use gtk::{prelude::*, Align, Box, Button, HeaderBar, Label, Window};
@@ -40,7 +38,9 @@ impl Component for Model {
                 <HeaderBar title="inc!" subtitle="AD ASTRA AD INFINITVM"
                            show_close_button=true />
                 <Box spacing=10 halign={Align::Center}>
-                    <Label label={self.counter.to_string()} />
+                    { gtk! {
+                        <Label label={self.counter.to_string()} />
+                    } }
                     <Button label="inc!" on clicked=|_| {Message::Inc} />
                 </Box>
             </Window>
