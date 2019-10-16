@@ -137,3 +137,16 @@ impl<'a> PropertyCompare<'a, String> for Option<GString> {
         Some(value.as_str().into())
     }
 }
+
+impl<'a> PropertyCompare<'a, &'a String> for Option<GString> {
+    fn property_compare(&self, other: &&String) -> bool {
+        match self {
+            Some(ref value) => value.as_str() == *other,
+            None => false,
+        }
+    }
+
+    fn property_convert(value: &&'a String) -> Self {
+        Some(value.as_str().into())
+    }
+}

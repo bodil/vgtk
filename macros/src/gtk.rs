@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Literal, Span, TokenStream};
+use proc_macro2::{Group, Ident, Literal, Span, TokenStream};
 use quote::quote;
 
 use crate::context::{Attribute, GtkComponent, GtkElement, GtkWidget};
@@ -24,6 +24,39 @@ pub fn expand_gtk(gtk: &GtkElement) -> TokenStream {
     match gtk {
         GtkElement::Widget(widget) => expand_widget(widget),
         GtkElement::Component(component) => expand_component(component),
+        GtkElement::Block(_block) => panic!("blocks not allowed in this position"),
+    }
+}
+
+pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
+    let name = &gtk.name;
+    let mut out = quote!(
+        use vgtk::{Component, vcomp::{VComponent, PropTransform}};
+        let mut vcomp = VComponent::new::<#name>();
+        let mut props = <#name as Component>::Properties::default();
+    );
+    for attribute in &gtk.attributes {
+        out.extend(match attribute {
+            Attribute::Property { name, value } => {
+                let value = to_stream(value);
+                quote!(
+                    props.#name = PropTransform::transform(&vcomp, #value);
+                )
+            }
+            Attribute::Handler { .. } => panic!("handler attributes are not allowed in components"),
+        })
+    }
+    quote!({
+        #out
+        vcomp.set_props::<#name>(props);
+        VNode::Component(vcomp)
+    })
+}
+
+fn is_block(gtk: &GtkElement) -> Option<&Group> {
+    match gtk {
+        GtkElement::Block(block) => Some(block),
+        _ => None,
     }
 }
 
@@ -48,10 +81,16 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
         });
     }
     for child in &gtk.children {
-        let child = expand_gtk(child);
-        out.extend(quote!(
-            children.push(#child);
-        ));
+        if let Some(block) = is_block(child) {
+            out.extend(quote!(
+                children.extend(#block);
+            ));
+        } else {
+            let child = expand_gtk(child);
+            out.extend(quote!(
+                children.push(#child);
+            ));
+        }
     }
     quote!({
         #out
@@ -62,13 +101,6 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
             children,
         })
     })
-}
-
-pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
-    let name = &gtk.name;
-    quote!(vgtk::vnode::VNode::Component(vgtk::vnode::VComponent {
-        object_type: #name,
-    }))
 }
 
 pub fn expand_property(object_type: &Ident, name: &Ident, value: &Vec<Token>) -> TokenStream {

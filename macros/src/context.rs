@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Error, Formatter};
 
-use proc_macro2::Ident;
+use proc_macro2::{Group, Ident};
 
 use crate::lexer::Token;
 
@@ -21,6 +21,7 @@ pub struct GtkComponent {
 pub enum GtkElement {
     Widget(GtkWidget),
     Component(GtkComponent),
+    Block(Group),
 }
 
 #[derive(Clone)]
