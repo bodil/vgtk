@@ -4,7 +4,6 @@
 extern crate gio;
 extern crate glib;
 extern crate gtk;
-extern crate im;
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
@@ -14,23 +13,22 @@ extern crate vgtk;
 
 use std::fmt::{Debug, Display};
 
-use im::Vector;
 use strum::IntoEnumIterator;
 
 use gio::ApplicationFlags;
 use glib::futures::task::Context;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{go, Callback, Component, VItem};
+use vgtk::{go, vnode::VNode, Callback, Component};
 
 #[derive(Clone, Debug, Default)]
-struct Radio<Enum> {
+struct Radio<Enum: Unpin> {
     active: Enum,
     on_changed: Option<Callback<Enum>>,
 }
 
 #[derive(Clone, Debug)]
-enum RadioMsg<Enum> {
+enum RadioMsg<Enum: Unpin> {
     Selected(Enum),
 }
 
@@ -43,7 +41,8 @@ where
         + Debug
         + Default
         + Clone
-        + Send,
+        + Send
+        + Unpin,
     I: Iterator<Item = Enum>,
 {
     type Message = RadioMsg<Enum>;
@@ -63,20 +62,20 @@ where
             RadioMsg::Selected(selected) => {
                 self.active = selected;
                 if let Some(ref callback) = self.on_changed {
-                    callback.send(ctx, self.active.clone());
+                    callback.send(self.active.clone());
                 }
             }
         }
         true
     }
 
-    fn view(&self) -> VItem<Radio<Enum>> {
+    fn view(&self) -> VNode<Radio<Enum>> {
         gtk! {
-            <Box center=true, orientation=Orientation::Horizontal, spacing=10, expand=true,>
-                { for Enum::iter().map(|label| {
+            <Box center=true orientation={Orientation::Horizontal} spacing=10 expand=true>
+                { Enum::iter().map(|label| {
                     gtk!{
-                        <ToggleButton label=label.to_string(), active=label == self.active,
-                                      on toggled=|_| RadioMsg::Selected(label.clone()),/>
+                        <ToggleButton label={label.to_string()} active={label == self.active}
+                                      on toggled=|_| {RadioMsg::Selected(label.clone())}/>
                     }
                 }) }
             </Box>
@@ -115,7 +114,7 @@ impl Item {
 
 #[derive(Clone, Debug)]
 struct Model {
-    items: Vector<Item>,
+    items: Vec<Item>,
     filter: Filter,
 }
 
@@ -165,7 +164,7 @@ impl Component for Model {
         let left = self.filter(Filter::Active).count();
         match msg {
             Msg::Add { item } => {
-                self.items.push_back(Item::new(item));
+                self.items.push(Item::new(item));
             }
             Msg::Remove { index } => {
                 self.items.remove(index);
@@ -182,17 +181,16 @@ impl Component for Model {
         true
     }
 
-    fn view(&self) -> VItem<Model> {
+    fn view(&self) -> VNode<Model> {
         gtk! {
-            <Window default_width=800, default_height=480, border_width=20u32, on destroy=|_| Msg::Exit,>
-                <HeaderBar title="TodoMVC", subtitle="wtf do we do now",
-                           show_close_button=true, />
-                <Box spacing=10, orientation=Orientation::Vertical,>
-                    <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
-                        <Button image="edit-select-all",
-                                always_show_image=true, on clicked=|_| Msg::ToggleAll,/>
-                        <Entry placeholder_text="What needs to be done?",
-                               expand=true, fill=true,
+            <Window default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
+                <HeaderBar title="TodoMVC" subtitle="wtf do we do now" show_close_button=true />
+                <Box spacing=10 orientation={Orientation::Vertical}>
+                    <Box spacing=10 orientation={Orientation::Horizontal} expand=false>
+                        <Button image="edit-select-all"
+                                always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
+                        <Entry placeholder_text="What needs to be done?"
+                               expand=true fill=true
                                on activate=|e| {
                                    let entry: Entry = e.source.downcast().unwrap();
                                    let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
@@ -200,20 +198,23 @@ impl Component for Model {
                                    Msg::Add {
                                        item: label
                                    }
-                               }, />
+                               } />
                     </Box>
-                    <ScrolledWindow expand=true, fill=true,>
-                        <ListBox selection_mode=SelectionMode::None,>
-                            { for self.filter(self.filter).enumerate().map(|(index, item)| render_item(index, item)) }
+                    <ScrolledWindow expand=true fill=true>
+                        <ListBox selection_mode={SelectionMode::None}>
+                            {
+                                self.filter(self.filter).enumerate()
+                                    .map(|(index, item)| render_item(index, item))
+                            }
                         </ListBox>
                     </ScrolledWindow>
-                    <Box spacing=10, orientation=Orientation::Horizontal, expand=false,>
-                        <Label label=self.left_label(),/>
-                        <Radio<Filter>: active=self.filter, on_changed=|filter| Msg::Filter { filter }, />
+                    <Box spacing=10 orientation={Orientation::Horizontal} expand=false>
+                        <Label label={self.left_label()}/>
+                        <Radio<Filter>: active={self.filter} on_changed=|filter| {Msg::Filter { filter }} />
                         {
                             self.filter(Filter::Completed).count() > 0 => gtk!{
-                                <Button label="Clear completed", pack_type=PackType::End,
-                                        on clicked=|_| Msg::ClearCompleted,/>
+                                <Button label="Clear completed" pack_type={PackType::End}
+                                        on clicked=|_| {Msg::ClearCompleted}/>
                             }
                         }
                     </Box>
@@ -223,7 +224,7 @@ impl Component for Model {
     }
 }
 
-fn render_item(index: usize, item: &Item) -> VItem<Model> {
+fn render_item(index: usize, item: &Item) -> VNode<Model> {
     let label = if item.done {
         format!(
             "<span strikethrough=\"true\" alpha=\"50%\">{}</span>",
@@ -234,12 +235,12 @@ fn render_item(index: usize, item: &Item) -> VItem<Model> {
     };
     gtk! {
         <ListBoxRow>
-            <Box spacing=10, orientation=Orientation::Horizontal,>
-                <CheckButton active=item.done, on toggled=|_| Msg::Toggle { index },/>
-                <Label label=label, use_markup=true, fill=true,/>
-                <Button pack_type=PackType::End, relief=ReliefStyle::None,
-                        always_show_image=true, image="edit-delete",
-                        on clicked=|_| Msg::Remove { index },/>
+            <Box spacing=10 orientation={Orientation::Horizontal}>
+                <CheckButton active=item.done on toggled=|_| {Msg::Toggle { index }} />
+                <Label label=label use_markup=true fill=true />
+                <Button pack_type={PackType::End} relief={ReliefStyle::None}
+                        always_show_image=true image="edit-delete"
+                        on clicked=|_| {Msg::Remove { index }} />
             </Box>
         </ListBoxRow>
     }
