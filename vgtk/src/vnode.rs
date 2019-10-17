@@ -1,8 +1,8 @@
-use gtk::Container;
 use std::borrow::Borrow;
 use std::rc::Rc;
 
-use glib::{signal::SignalHandlerId, GString, Object, Type};
+use glib::{object::Cast, signal::SignalHandlerId, GString, IsA, Object, Type};
+use gtk::{Container, IconSize, Image, ImageExt, Widget};
 
 pub use crate::vcomp::VComponent;
 use crate::{Component, Scope};
@@ -42,106 +42,6 @@ pub struct VHandler<Model: Component> {
     pub name: &'static str,
     pub id: &'static str,
     pub set: Rc<dyn Fn(&Object, &Scope<Model>) -> SignalHandlerId>,
-}
-
-pub trait PropertyCompare<'a, A> {
-    fn property_compare(&self, other: &A) -> bool;
-    fn property_convert(value: &'a A) -> Self;
-}
-
-impl<'a, A> PropertyCompare<'a, A> for A
-where
-    A: Eq + ToOwned<Owned = A>,
-{
-    fn property_compare(&self, other: &A) -> bool {
-        self == other
-    }
-
-    fn property_convert(value: &A) -> Self {
-        value.to_owned()
-    }
-}
-
-impl<'a> PropertyCompare<'a, String> for &'a str {
-    fn property_compare(&self, other: &String) -> bool {
-        self == other
-    }
-
-    fn property_convert(value: &'a String) -> Self {
-        value.as_str()
-    }
-}
-
-impl<'a> PropertyCompare<'a, &'a String> for &'a str {
-    fn property_compare(&self, other: &&String) -> bool {
-        self == other
-    }
-
-    fn property_convert(value: &&'a String) -> Self {
-        value.as_str()
-    }
-}
-
-impl<'a> PropertyCompare<'a, &'a str> for Option<&'a str> {
-    fn property_compare(&self, other: &&str) -> bool {
-        match self {
-            Some(ref value) => value == other,
-            None => false,
-        }
-    }
-
-    fn property_convert(value: &&'a str) -> Self {
-        Some(*value)
-    }
-}
-
-impl<'a> PropertyCompare<'a, &'a str> for GString {
-    fn property_compare(&self, other: &&str) -> bool {
-        self.as_str() == *other
-    }
-
-    fn property_convert(value: &&'a str) -> Self {
-        (*value).into()
-    }
-}
-
-impl<'a> PropertyCompare<'a, &'a str> for Option<GString> {
-    fn property_compare(&self, other: &&str) -> bool {
-        match self {
-            Some(ref value) => value.as_str() == *other,
-            None => false,
-        }
-    }
-
-    fn property_convert(value: &&'a str) -> Self {
-        Some((*value).into())
-    }
-}
-
-impl<'a> PropertyCompare<'a, String> for Option<GString> {
-    fn property_compare(&self, other: &String) -> bool {
-        match self {
-            Some(ref value) => value.as_str() == *other,
-            None => false,
-        }
-    }
-
-    fn property_convert(value: &'a String) -> Self {
-        Some(value.as_str().into())
-    }
-}
-
-impl<'a> PropertyCompare<'a, &'a String> for Option<GString> {
-    fn property_compare(&self, other: &&String) -> bool {
-        match self {
-            Some(ref value) => value.as_str() == *other,
-            None => false,
-        }
-    }
-
-    fn property_convert(value: &&'a String) -> Self {
-        Some(value.as_str().into())
-    }
 }
 
 pub struct VNodeIterator<Model: Component> {

@@ -39,7 +39,7 @@ impl Component for MyButton {
 
     fn view(&self) -> VNode<Self> {
         gtk! {
-            <Button label={self.label.clone()} on clicked=|_| {MyButtonMsg::Clicked} />
+            <Button label={self.label.as_str()} on clicked=|_| {MyButtonMsg::Clicked} />
         }
     }
 }

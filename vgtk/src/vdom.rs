@@ -67,10 +67,6 @@ impl<Model: 'static + Component> State<Model> {
 fn build_obj<A: IsA<Object>>(class: Type) -> A {
     let mut ui = String::new();
     ui += &format!("<interface><object class=\"{}\"", class);
-    // if let Some(id) = id {
-    //     // TODO escape this string y'all
-    //     ui += &format!(" id=\"{}\"", id);
-    // }
     ui += "/></interface>";
 
     let builder = Builder::new_from_string(&ui);
@@ -181,11 +177,8 @@ pub struct GtkState<Model: Component> {
 
 impl<Model: 'static + Component> GtkState<Model> {
     pub fn build(vobj: &VWidget<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
-        // let id = vobj.get_prop("id");
-
         // Build this object
         let object = build_obj::<Widget>(vobj.object_type);
-        // println!("Built {}", object.get_type());
 
         // Add to parent
         if let Some(parent) = parent {
@@ -194,9 +187,7 @@ impl<Model: 'static + Component> GtkState<Model> {
 
         // Apply properties
         for prop in &vobj.properties {
-            // if prop.name != "id" {
             (prop.set)(object.upcast_ref(), parent, true);
-            // }
         }
 
         // Apply handlers

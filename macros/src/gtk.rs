@@ -75,7 +75,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     let name = &gtk.name;
     let (prop_count, handler_count) = count_attributes(&gtk.attributes);
     let mut out = quote!(
-        use vgtk::vnode::{VNode, VHandler, VProperty, VWidget, VComponent, PropertyCompare};
+        use vgtk::vnode::{VNode, VHandler, VProperty, VWidget, VComponent};
         use vgtk::Scope;
         use glib::StaticType;
         let object_type = #name::static_type();
@@ -158,16 +158,16 @@ pub fn expand_property(
     };
     let setter_body = if parent.is_empty() {
         quote!(
-            if force || !object.#getter().property_compare(&value) {
-                object.#setter(PropertyCompare::property_convert(&value));
+            if force || !value.compare(object.#getter()) {
+                object.#setter(value.coerce());
             }
         )
     } else {
         quote!(
             let parent: &#parent_type = parent.expect("child attribute without a reachable parent").downcast_ref()
                   .unwrap_or_else(|| panic!("downcast to {:?} failed on parent in property setter", #parent_type::static_type()));
-            if force || !parent.#getter(object).property_compare(&value) {
-                parent.#setter(object, PropertyCompare::property_convert(&value));
+            if force || !value.compare(parent.#getter(object)) {
+                parent.#setter(object, value.coerce());
             }
         )
     };
@@ -175,7 +175,10 @@ pub fn expand_property(
         {
             use gtk::{Container, Widget};
             use glib::StaticType;
-            let value = #value;
+            use vgtk::properties::{
+                IntoPropertyValue, PropertyValue, PropertyValueCoerce, PropertyValueCompare,
+            };
+            let value = #value.into_property_value();
             VProperty {
                 name: #prop_name,
                 set: std::rc::Rc::new(move |object: &glib::Object, parent: Option<&Container>, force: bool| {
