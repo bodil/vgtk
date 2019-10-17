@@ -1,3 +1,4 @@
+use gtk::Container;
 use std::borrow::Borrow;
 use std::rc::Rc;
 
@@ -11,14 +12,6 @@ pub enum VNode<Model: Component> {
     Component(VComponent<Model>),
 }
 
-impl<Model: Component> IntoIterator for VNode<Model> {
-    type Item = VNode<Model>;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
-    }
-}
-
 pub struct VWidget<Model: Component> {
     pub object_type: Type,
     pub properties: Vec<VProperty>,
@@ -29,7 +22,7 @@ pub struct VWidget<Model: Component> {
 #[derive(Clone)]
 pub struct VProperty {
     pub name: &'static str,
-    pub set: Rc<dyn Fn(&Object, bool) + 'static>,
+    pub set: Rc<dyn Fn(&Object, Option<&Container>, bool) + 'static>,
 }
 
 impl<Model: Component> VWidget<Model> {
@@ -148,5 +141,30 @@ impl<'a> PropertyCompare<'a, &'a String> for Option<GString> {
 
     fn property_convert(value: &&'a String) -> Self {
         Some(value.as_str().into())
+    }
+}
+
+pub struct VNodeIterator<Model: Component> {
+    node: Option<VNode<Model>>,
+}
+
+impl<Model: Component> Iterator for VNodeIterator<Model> {
+    type Item = VNode<Model>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.node.take()
+    }
+}
+
+impl<Model: Component> IntoIterator for VNode<Model> {
+    type Item = VNode<Model>;
+    type IntoIter = VNodeIterator<Model>;
+    fn into_iter(self) -> Self::IntoIter {
+        VNodeIterator { node: Some(self) }
+    }
+}
+
+impl<Model: Component> VNode<Model> {
+    pub fn empty() -> VNodeIterator<Model> {
+        VNodeIterator { node: None }
     }
 }

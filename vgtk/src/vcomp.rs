@@ -9,6 +9,7 @@ use crate::callback::Callback;
 use crate::component::Component;
 use crate::scope::Scope;
 use crate::vdom::ComponentState;
+use crate::vnode::VProperty;
 
 pub struct AnyProps {
     valid: AtomicBool,
@@ -49,13 +50,14 @@ impl AnyProps {
 }
 
 type Constructor<Model> =
-    dyn Fn(&AnyProps, Option<&Container>, &Scope<Model>) -> ComponentState<Model>;
+    dyn Fn(&AnyProps, Option<&Container>, &[VProperty], &Scope<Model>) -> ComponentState<Model>;
 
 pub struct VComponent<Model: Component> {
     parent: PhantomData<Model>,
     pub model_type: TypeId,
     pub props: AnyProps,
     pub constructor: Box<Constructor<Model>>,
+    pub child_props: Vec<VProperty>,
 }
 
 impl<Model: 'static + Component> VComponent<Model> {
@@ -66,6 +68,7 @@ impl<Model: 'static + Component> VComponent<Model> {
             model_type: TypeId::of::<Child>(),
             props: AnyProps::null(),
             constructor,
+            child_props: Vec::new(),
         }
     }
 

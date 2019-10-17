@@ -1,6 +1,7 @@
 mod callback;
 mod component;
 mod event;
+pub mod ext;
 mod ffi;
 mod mainloop;
 mod scope;

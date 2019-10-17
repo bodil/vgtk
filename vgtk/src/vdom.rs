@@ -1,7 +1,7 @@
 use glib::futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
 use glib::SignalHandlerId;
-use glib::{Object, Type, Value};
+use glib::{Object, Type};
 use gtk::prelude::*;
 use gtk::{self, Builder, Container, IconSize, Image, Widget, Window};
 use std::collections::HashMap;
@@ -11,7 +11,6 @@ use std::any::TypeId;
 use std::marker::PhantomData;
 
 use crate::component::{Component, ComponentMessage, ComponentTask};
-use crate::ffi;
 use crate::mainloop::MainLoop;
 use crate::scope::Scope;
 use crate::vcomp::AnyProps;
@@ -28,7 +27,7 @@ impl<Model: 'static + Component> State<Model> {
         match vnode {
             VNode::Widget(widget) => State::Gtk(GtkState::build(widget, parent, scope)),
             VNode::Component(vcomp) => {
-                let comp = (vcomp.constructor)(&vcomp.props, parent, scope);
+                let comp = (vcomp.constructor)(&vcomp.props, parent, &vcomp.child_props, scope);
                 State::Component(comp)
             }
         }
@@ -50,7 +49,7 @@ impl<Model: 'static + Component> State<Model> {
                 State::Component(_) => false,
             },
             VNode::Component(vcomp) => match self {
-                State::Component(state) => state.patch(vcomp, scope),
+                State::Component(state) => state.patch(vcomp, parent, scope),
                 State::Gtk(_) => false,
             },
         }
@@ -100,9 +99,11 @@ impl<Model: 'static + Component> ComponentState<Model> {
     pub fn build<Child: 'static + Component>(
         props: &AnyProps,
         parent: Option<&Container>,
+        child_props: &[VProperty],
         scope: &Scope<Model>,
     ) -> Self {
-        let (sub_state, object) = SubcomponentState::<Child>::new(props, parent, scope);
+        let (sub_state, object) =
+            SubcomponentState::<Child>::new(props, parent, child_props, scope);
         ComponentState {
             parent: PhantomData,
             object,
@@ -111,9 +112,18 @@ impl<Model: 'static + Component> ComponentState<Model> {
         }
     }
 
-    pub fn patch(&mut self, spec: &VComponent<Model>, _scope: &Scope<Model>) -> bool {
+    pub fn patch(
+        &mut self,
+        spec: &VComponent<Model>,
+        parent: Option<&Container>,
+        _scope: &Scope<Model>,
+    ) -> bool {
         if self.model_type == spec.model_type {
             // Components have same type; update props
+            for prop in &spec.child_props {
+                println!("[patch] setting child prop for component: {:?}", prop.name);
+                (prop.set)(self.object.upcast_ref(), parent, false);
+            }
             self.state.update(&spec.props);
             true
         } else {
@@ -132,11 +142,16 @@ impl<Model: 'static + Component> SubcomponentState<Model> {
     fn new<P: 'static + Component>(
         props: &AnyProps,
         parent: Option<&Container>,
+        child_props: &[VProperty],
         parent_scope: &Scope<P>,
     ) -> (Self, Widget) {
         let props: Model::Properties = props.unwrap();
         let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
         let widget = task.widget();
+        for prop in child_props {
+            println!("[build] setting child prop for component: {:?}", prop.name);
+            (prop.set)(widget.upcast_ref(), parent, true);
+        }
 
         crate::MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
         (SubcomponentState { channel }, widget)
@@ -180,7 +195,7 @@ impl<Model: 'static + Component> GtkState<Model> {
         // Apply properties
         for prop in &vobj.properties {
             // if prop.name != "id" {
-            (prop.set)(object.upcast_ref(), true);
+            (prop.set)(object.upcast_ref(), parent, true);
             // }
         }
 
@@ -260,7 +275,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                                 break;
                             }
                             VNode::Component(ref spec) => {
-                                if !target.patch(spec, scope) {
+                                if !target.patch(spec, Some(parent), scope) {
                                     reconstruct_from = Some(index);
                                     break;
                                 }
@@ -353,22 +368,22 @@ impl<Model: 'static + Component> GtkState<Model> {
         true
     }
 
-    fn patch_properties(&mut self, properties: &Vec<VProperty>, parent: Option<&Container>) {
+    fn patch_properties(&mut self, properties: &[VProperty], parent: Option<&Container>) {
         for prop in properties {
-            (prop.set)(self.object.upcast_ref(), false);
+            (prop.set)(self.object.upcast_ref(), parent, false);
         }
     }
 
-    fn patch_handlers(&mut self, handlers: &Vec<VHandler<Model>>, scope: &Scope<Model>) {
+    fn patch_handlers(&mut self, handlers: &[VHandler<Model>], scope: &Scope<Model>) {
         // FIXME need to store and match IDs
         let mut seen = HashSet::new();
         let mut remove = Vec::new();
         for handler in handlers {
             let key = (handler.name, handler.id);
             seen.insert(key.clone());
-            if !self.handlers.contains_key(&key) {
+            if let std::collections::hash_map::Entry::Vacant(entry) = self.handlers.entry(key) {
                 let handle = (handler.set)(self.object.upcast_ref(), scope);
-                self.handlers.insert(key, handle);
+                entry.insert(handle);
             }
         }
         for key in self.handlers.keys() {

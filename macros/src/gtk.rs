@@ -1,4 +1,4 @@
-use proc_macro2::{Group, Ident, Literal, Span, TokenStream};
+use proc_macro2::{Group, Ident, Literal, TokenStream};
 use quote::quote;
 
 use crate::context::{Attribute, GtkComponent, GtkElement, GtkWidget};
@@ -8,7 +8,7 @@ fn to_string_literal<S: ToString>(s: S) -> Literal {
     Literal::string(&s.to_string())
 }
 
-fn count_attributes(attributes: &Vec<Attribute>) -> (usize, usize) {
+fn count_attributes(attributes: &[Attribute]) -> (usize, usize) {
     let mut props = 0;
     let mut handlers = 0;
     for attribute in attributes {
@@ -37,11 +37,22 @@ pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
     );
     for attribute in &gtk.attributes {
         out.extend(match attribute {
-            Attribute::Property { name, value } => {
-                let value = to_stream(value);
-                quote!(
-                    props.#name = PropTransform::transform(&vcomp, #value);
-                )
+            Attribute::Property {
+                parent,
+                name,
+                value,
+            } => {
+                if !parent.is_empty() {
+                    let prop = expand_property(None, parent, name, value);
+                    quote!(
+                        vcomp.child_props.push(#prop);
+                    )
+                } else {
+                    let value = to_stream(value);
+                    quote!(
+                        props.#name = PropTransform::transform(&vcomp, #value);
+                    )
+                }
             }
             Attribute::Handler { .. } => panic!("handler attributes are not allowed in components"),
         })
@@ -74,7 +85,16 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     );
     for attribute in &gtk.attributes {
         out.extend(match attribute {
-            Attribute::Property { name, value } => expand_property(&gtk.name, &name, &value),
+            Attribute::Property {
+                parent,
+                name,
+                value,
+            } => {
+                let prop = expand_property(Some(&gtk.name), &parent, &name, &value);
+                quote!(
+                    properties.push(#prop);
+                )
+            }
             Attribute::Handler { name, args, body } => {
                 expand_handler(&gtk.name, &name, &args, &body)
             }
@@ -103,37 +123,79 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     })
 }
 
-pub fn expand_property(object_type: &Ident, name: &Ident, value: &Vec<Token>) -> TokenStream {
-    let getter = Ident::new(&format!("get_{}", name.to_string()), Span::call_site());
-    let setter = Ident::new(&format!("set_{}", name.to_string()), Span::call_site());
+pub fn expand_property(
+    object_type: Option<&Ident>,
+    parent: &[Token],
+    name: &Ident,
+    value: &[Token],
+) -> TokenStream {
+    let child_prefix = if !parent.is_empty() { "child_" } else { "" };
+    let mut parent_type: Vec<Token> = parent.to_vec();
+    while let Some(Token::Punct(_, _)) = parent_type.last() {
+        parent_type.pop();
+    }
+    let parent_type = to_stream(parent_type.iter());
+    let getter = Ident::new(
+        &format!("get_{}{}", child_prefix, name.to_string()),
+        name.span(),
+    );
+    let setter = Ident::new(
+        &format!("set_{}{}", child_prefix, name.to_string()),
+        name.span(),
+    );
     let value = to_stream(value);
     let prop_name = to_string_literal(name);
+    let setter_prelude = if let Some(object_type) = object_type {
+        quote!(
+            let object: &#object_type = object.downcast_ref()
+                  .unwrap_or_else(|| panic!("downcast to {:?} failed in property setter", #object_type::static_type()));
+        )
+    } else {
+        quote!(
+            let object: &Widget = object.downcast_ref()
+                  .expect("downcast to Widget failed in property setter");
+        )
+    };
+    let setter_body = if parent.is_empty() {
+        quote!(
+            if force || !object.#getter().property_compare(&value) {
+                object.#setter(PropertyCompare::property_convert(&value));
+            }
+        )
+    } else {
+        quote!(
+            let parent: &#parent_type = parent.expect("child attribute without a reachable parent").downcast_ref()
+                  .unwrap_or_else(|| panic!("downcast to {:?} failed on parent in property setter", #parent_type::static_type()));
+            if force || !parent.#getter(object).property_compare(&value) {
+                parent.#setter(object, PropertyCompare::property_convert(&value));
+            }
+        )
+    };
     quote!(
-        properties.push({
+        {
+            use gtk::{Container, Widget};
+            use glib::StaticType;
             let value = #value;
             VProperty {
                 name: #prop_name,
-                set: std::rc::Rc::new(move |object: &glib::Object, force: bool| {
-                    let object: &#object_type = object.downcast_ref()
-                          .unwrap_or_else(|| panic!("downcast to {:?} failed in property setter", #object_type::static_type()));
-                    if force || !object.#getter().property_compare(&value) {
-                        object.#setter(PropertyCompare::property_convert(&value));
-                    }
+                set: std::rc::Rc::new(move |object: &glib::Object, parent: Option<&Container>, force: bool| {
+                    #setter_prelude
+                    #setter_body
                 }),
             }
-        });
+        }
     )
 }
 
 pub fn expand_handler(
     object_type: &Ident,
     name: &Ident,
-    args: &Vec<Token>,
-    body: &Vec<Token>,
+    args: &[Token],
+    body: &[Token],
 ) -> TokenStream {
     let args_s = to_stream(args);
     let body_s = to_stream(body);
-    let connect = Ident::new(&format!("connect_{}", name.to_string()), Span::call_site());
+    let connect = Ident::new(&format!("connect_{}", name.to_string()), name.span());
     let signal_name = to_string_literal(name);
     let location = args.first().expect("signal handler is empty!").span();
     let signal_id = to_string_literal(format!("{:?}", location));
@@ -141,7 +203,7 @@ pub fn expand_handler(
         handlers.push(VHandler {
             name: #signal_name,
             id: #signal_id,
-            set: std::rc::Rc::new(|object: &glib::Object, scope: &Scope<_>| {
+            set: std::rc::Rc::new(move |object: &glib::Object, scope: &Scope<_>| {
                 let object: &#object_type = object.downcast_ref()
                       .unwrap_or_else(|| panic!("downcast to {:?} failed in signal setter", #object_type::static_type()));
                 let scope: Scope<_> = scope.clone();

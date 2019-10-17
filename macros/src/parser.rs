@@ -38,7 +38,7 @@ pub fn match_ident<'a>(name: &str) -> impl Parser<'a, Token, Token> {
             input
                 .get()
                 .map(|i| i.span())
-                .unwrap_or_else(|| Span::call_site()),
+                .unwrap_or_else(Span::call_site),
         );
         match input.get() {
             Some(Token::Ident(ident)) if ident == &target => {
@@ -107,9 +107,19 @@ pub fn closure<'a>() -> impl Parser<'a, Token, (Vec<Token>, Vec<Token>)> {
 }
 
 pub fn property_attr<'a>() -> impl Parser<'a, Token, Attribute> {
-    ident()
+    rust_type_path
         .pair(punct('=').right(expect(rust_expr())))
-        .map(|(name, value)| Attribute::Property { name, value })
+        .map(|(mut parent, value)| {
+            if let Some(Token::Ident(name)) = parent.pop() {
+                Attribute::Property {
+                    parent,
+                    name,
+                    value,
+                }
+            } else {
+                panic!("unexpected token found, should have been Ident")
+            }
+        })
 }
 
 pub fn handler_attr<'a>() -> impl Parser<'a, Token, Attribute> {
@@ -129,8 +139,9 @@ pub fn end_tag<'a>(expected: Ident) -> impl Parser<'a, Token, Ident> {
         punct('/').right(
             ident()
                 .assert(move |ident| {
+                    let ident_name = ident.to_string();
                     let expected = expected.to_string();
-                    if ident.to_string() == expected {
+                    if ident_name == expected {
                         Ok(ident)
                     } else {
                         Err(|err: Error<'a, Token>| {
@@ -218,9 +229,9 @@ pub fn component<'a>() -> impl Parser<'a, Token, GtkComponent> {
 }
 
 pub fn element<'a>() -> impl Parser<'a, Token, GtkElement> {
-    component().map(|component| GtkElement::Component(component))
-        | widget().map(|widget| GtkElement::Widget(widget))
-        | group().map(|group| GtkElement::Block(group))
+    component().map(GtkElement::Component)
+        | widget().map(GtkElement::Widget)
+        | group().map(GtkElement::Block)
 }
 
 #[cfg(test)]

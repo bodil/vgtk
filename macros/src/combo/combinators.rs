@@ -67,7 +67,7 @@ where
     Output: 'a,
     P: Parser<'a, Input, Output> + 'a,
 {
-    optional_with(parser, |v| Some(v), || None)
+    optional_with(parser, Some, || None)
 }
 
 pub fn map<'a, P, Input, I, O, F>(parser: P, f: F) -> impl Parser<'a, Input, O>
@@ -265,14 +265,9 @@ where
     move |input: &Cursor<'a, Input>| {
         let mut out = Vec::new();
         let mut cursor = input.clone();
-        loop {
-            match parser.parse(&cursor) {
-                Ok(success) => {
-                    out.push(success.value);
-                    cursor = success.next;
-                }
-                Err(_) => break,
-            }
+        while let Ok(success) = parser.parse(&cursor) {
+            out.push(success.value);
+            cursor = success.next;
         }
         ok(out, input, cursor)
     }
@@ -298,14 +293,9 @@ where
             }
             i -= 1;
         }
-        loop {
-            match parser.parse(&cursor) {
-                Ok(success) => {
-                    out.push(success.value);
-                    cursor = success.next;
-                }
-                Err(_) => break,
-            }
+        while let Ok(success) = parser.parse(&cursor) {
+            out.push(success.value);
+            cursor = success.next;
         }
         ok(out, input, cursor)
     }
