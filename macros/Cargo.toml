@@ -3,6 +3,7 @@ name = "vgtk-macros"
 version = "0.1.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
+license = "LGPL-3.0+"
 build = "build.rs"
 
 [lib]
@@ -11,7 +12,7 @@ proc-macro = true
 [dependencies]
 ansi_term = "0.12.1"
 proc-macro2 = { version = "1.0.5", features = ["nightly"] }
-proc-macro-hack = "0.5.10"
+proc-macro-hack = "0.5.2"
 quote = "1.0.2"
 
 [build-dependencies]

@@ -3,6 +3,7 @@ name = "vgtk"
 version = "0.1.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
+license = "LGPL-3.0+"
 
 [dependencies]
 gio = "0.7.0"
