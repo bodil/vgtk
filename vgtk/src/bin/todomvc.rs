@@ -60,7 +60,7 @@ where
             RadioMsg::Selected(selected) => {
                 self.active = selected;
                 if let Some(ref callback) = self.on_changed {
-                    callback.send(self.active.clone());
+                    callback.send(self.active);
                 }
             }
         }
