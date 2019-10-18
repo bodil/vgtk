@@ -8,16 +8,23 @@ fn to_string_literal<S: ToString>(s: S) -> Literal {
     Literal::string(&s.to_string())
 }
 
-fn count_attributes(attributes: &[Attribute]) -> (usize, usize) {
+fn count_attributes(attributes: &[Attribute]) -> (usize, usize, usize) {
     let mut props = 0;
+    let mut child_props = 0;
     let mut handlers = 0;
     for attribute in attributes {
         match attribute {
-            Attribute::Property { .. } => props += 1,
+            Attribute::Property { parent, .. } => {
+                if parent.is_empty() {
+                    props += 1
+                } else {
+                    child_props += 1
+                }
+            }
             Attribute::Handler { .. } => handlers += 1,
         }
     }
-    (props, handlers)
+    (props, child_props, handlers)
 }
 
 pub fn expand_gtk(gtk: &GtkElement) -> TokenStream {
@@ -73,13 +80,14 @@ fn is_block(gtk: &GtkElement) -> Option<&Group> {
 
 pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     let name = &gtk.name;
-    let (prop_count, handler_count) = count_attributes(&gtk.attributes);
+    let (prop_count, child_prop_count, handler_count) = count_attributes(&gtk.attributes);
     let mut out = quote!(
         use vgtk::vnode::{VNode, VHandler, VProperty, VWidget, VComponent};
         use vgtk::Scope;
         use glib::StaticType;
         let object_type = #name::static_type();
         let mut properties = Vec::with_capacity(#prop_count);
+        let mut child_props = Vec::with_capacity(#child_prop_count);
         let mut handlers = Vec::with_capacity(#handler_count);
         let mut children = Vec::new();
     );
@@ -91,9 +99,15 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
                 value,
             } => {
                 let prop = expand_property(Some(&gtk.name), &parent, &name, &value);
-                quote!(
-                    properties.push(#prop);
-                )
+                if parent.is_empty() {
+                    quote!(
+                        properties.push(#prop);
+                    )
+                } else {
+                    quote!(
+                        child_props.push(#prop);
+                    )
+                }
             }
             Attribute::Handler { name, args, body } => {
                 expand_handler(&gtk.name, &name, &args, &body)
@@ -117,6 +131,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
         VNode::Widget(VWidget {
             object_type,
             properties,
+            child_props,
             handlers,
             children,
         })

@@ -207,7 +207,7 @@ impl Component for Model {
                     </ScrolledWindow>
                     <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
                         <Label label={self.left_label()}/>
-                        <@Radio<Filter> Box::expand=true active={self.filter} on_changed={|filter| Msg::Filter { filter }} />
+                        <@Radio<Filter> Box::center_widget=true active={self.filter} on_changed={|filter| Msg::Filter { filter }} />
                         {
                             if self.filter(Filter::Completed).count() > 0 {
                                 (gtk!{

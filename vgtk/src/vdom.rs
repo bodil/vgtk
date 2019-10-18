@@ -3,7 +3,7 @@ use glib::prelude::*;
 use glib::SignalHandlerId;
 use glib::{Object, Type};
 use gtk::prelude::*;
-use gtk::{self, Builder, Container, Widget, Window};
+use gtk::{self, Box as GtkBox, Builder, Container, Widget, Window};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -175,15 +175,52 @@ pub struct GtkState<Model: Component> {
     children: Vec<State<Model>>,
 }
 
+// Gtk has many strange ways of adding children to a parent.
+fn add_child<Model: Component>(
+    parent: &Container,
+    index: usize,
+    total: usize,
+    child_spec: &VNode<Model>,
+    child: &Widget,
+) {
+    if let Some(window) = parent.downcast_ref::<Window>() {
+        // Window: if 1 child, it's the window's main widget. If 2 children, the
+        // first is the title bar and the second is the main widget. More than 2
+        // is not ok.
+        if total > 2 {
+            panic!(
+                "Windows can only have 1 or 2 children, but {} were found.",
+                total
+            );
+        }
+        if total == 2 && index == 0 {
+            window.set_titlebar(Some(child));
+        } else {
+            window.add(child);
+        }
+    } else if let Some(parent) = parent.downcast_ref::<GtkBox>() {
+        // Box: added normally, except one widget can be added using
+        // set_center_widget() if it has the center_widget=true child property
+        // (which is faked in ext.rs). More than one child with this property is
+        // undefined behaviour.
+        if child_spec.get_child_prop("center_widget").is_some() {
+            parent.set_center_widget(Some(child));
+        } else {
+            parent.add(child);
+        }
+    } else {
+        parent.add(child);
+    }
+    // Apply child properties
+    for prop in child_spec.get_child_props() {
+        (prop.set)(child.upcast_ref(), Some(parent), true);
+    }
+}
+
 impl<Model: 'static + Component> GtkState<Model> {
     pub fn build(vobj: &VWidget<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         // Build this object
         let object = build_obj::<Widget>(vobj.object_type);
-
-        // Add to parent
-        if let Some(parent) = parent {
-            parent.add(&object);
-        }
 
         // Apply properties
         for prop in &vobj.properties {
@@ -204,39 +241,19 @@ impl<Model: 'static + Component> GtkState<Model> {
         };
 
         // Build children
-        if !vobj.children.is_empty() {
-            if let Some(window) = object.downcast_ref::<Window>() {
-                match vobj.children.len() {
-                    2 => {
-                        let header =
-                            State::build(&vobj.children[0], Some(window.upcast_ref()), scope);
-                        window.remove(header.object());
-                        window.set_titlebar(Some(header.object()));
-                        state.children.push(header);
-                        let body =
-                            State::build(&vobj.children[1], Some(window.upcast_ref()), scope);
-                        state.children.push(body);
-                    }
-                    1 => {
-                        let body =
-                            State::build(&vobj.children[0], Some(window.upcast_ref()), scope);
-                        state.children.push(body);
-                    }
-                    length => {
-                        panic!(
-                            "Window must have either one or two children, but found {}",
-                            length
-                        );
-                    }
-                }
-            } else if let Some(parent) = object.downcast_ref::<Container>() {
-                for child_spec in &vobj.children {
-                    let child = State::build(child_spec, Some(parent), scope);
-                    state.children.push(child);
-                }
-            } else {
-                panic!("non-Container cannot have children: {}", vobj.object_type);
+        if let Some(parent) = object.downcast_ref::<Container>() {
+            let total_children = vobj.children.len();
+            for (index, child_spec) in vobj.children.iter().enumerate() {
+                let child = State::build(child_spec, Some(parent), scope);
+                let widget = child.object().clone();
+                add_child(parent, index, total_children, child_spec, &widget);
+                state.children.push(child);
             }
+        } else if !vobj.children.is_empty() {
+            panic!(
+                "vnode has children but object type is {:?} which isn't a Container",
+                vobj.object_type
+            );
         }
 
         // Show this object
@@ -302,14 +319,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                     (None, Some(spec)) => {
                         // New spec; construct
                         let state = State::build(spec, Some(&parent), scope);
-                        // Special case: the first child of a window with two
-                        // children must be added with set_titlebar
-                        if let (Some(window), 0, 2) =
-                            (parent.downcast_ref::<Window>(), index, vobj.children.len())
-                        {
-                            window.remove(state.object());
-                            window.set_titlebar(Some(state.object()));
-                        }
+                        add_child(parent, index, vobj.children.len(), spec, state.object());
                         to_append.push(state);
                     }
                     (None, None) => break,
@@ -324,8 +334,15 @@ impl<Model: 'static + Component> GtkState<Model> {
                     parent.remove(child.object());
                 }
                 // Rebuild children from new specs
-                for child_spec in vobj.children.iter().skip(index) {
+                for (index, child_spec) in vobj.children.iter().enumerate().skip(index) {
                     let state = State::build(child_spec, Some(&parent), scope);
+                    add_child(
+                        parent,
+                        index,
+                        vobj.children.len(),
+                        child_spec,
+                        state.object(),
+                    );
                     state.object().show();
                     self.children.push(state);
                 }
@@ -352,6 +369,9 @@ impl<Model: 'static + Component> GtkState<Model> {
 
         // Patch properties
         self.patch_properties(&vobj.properties, parent);
+
+        // Patch child properties
+        self.patch_properties(&vobj.child_props, parent);
 
         // Patch handlers
         self.patch_handlers(&vobj.handlers, scope);

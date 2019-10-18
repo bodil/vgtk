@@ -1,48 +1,6 @@
 use gio::ApplicationFlags;
 use gtk::{prelude::*, Align, Box, Button, HeaderBar, Label, Window};
-use vgtk::{go, gtk, vnode::VNode, Callback, Component};
-
-#[derive(Clone, Debug, Default)]
-struct MyButton {
-    label: String,
-    on_clicked: Option<Callback<()>>,
-}
-
-#[derive(Clone, Debug)]
-enum MyButtonMsg {
-    Clicked,
-}
-
-impl Component for MyButton {
-    type Message = MyButtonMsg;
-    type Properties = Self;
-
-    fn create(props: Self::Properties) -> Self {
-        props
-    }
-
-    fn change(&mut self, props: Self::Properties) -> bool {
-        *self = props;
-        true
-    }
-
-    fn update(&mut self, msg: Self::Message) -> bool {
-        match msg {
-            MyButtonMsg::Clicked => {
-                if let Some(ref callback) = self.on_clicked {
-                    callback.send(())
-                }
-            }
-        }
-        true
-    }
-
-    fn view(&self) -> VNode<Self> {
-        gtk! {
-            <Button label={self.label.as_str()} on clicked=|_| {MyButtonMsg::Clicked} />
-        }
-    }
-}
+use vgtk::{go, gtk, vnode::VNode, Component};
 
 #[derive(Clone, Debug, Default)]
 struct Model {
@@ -78,16 +36,9 @@ impl Component for Model {
                 <HeaderBar title="inc!" subtitle="AD ASTRA AD INFINITVM"
                            show_close_button=true />
                 <Box spacing=10 halign={Align::Center}>
-                    // You can generate nodes programmaticaly by returning an
-                    // IntoIterator of nodes from a block. (`VNode` itself
-                    // implements IntoIterator and returns a `Once<VNode>`.)
-                    { gtk! {
-                        <Label label={self.counter.to_string()} />
-                    } }
-                    // You can insert subcomponents instead of widgets with the
-                    // `@` syntax. The attributes map directly to the
-                    // sub-model's `Component::Properties` struct.
-                    <@MyButton label="inc!" on_clicked={|_| Message::Inc} />
+                    <Label label={self.counter.to_string()} />
+                    <Button label="inc!" image="add" always_show_image=true
+                            on clicked=|_| {Message::Inc} />
                 </Box>
             </Window>
         }

@@ -11,9 +11,29 @@ pub enum VNode<Model: Component> {
     Component(VComponent<Model>),
 }
 
+impl<Model: Component> VNode<Model> {
+    pub fn get_child_props(&self) -> &[VProperty] {
+        match self {
+            VNode::Widget(widget) => &widget.child_props,
+            VNode::Component(comp) => &comp.child_props,
+        }
+    }
+
+    pub fn get_child_prop(&self, name: &str) -> Option<&VProperty> {
+        let props = self.get_child_props();
+        for prop in props {
+            if prop.name == name {
+                return Some(prop);
+            }
+        }
+        None
+    }
+}
+
 pub struct VWidget<Model: Component> {
     pub object_type: Type,
     pub properties: Vec<VProperty>,
+    pub child_props: Vec<VProperty>,
     pub handlers: Vec<VHandler<Model>>,
     pub children: Vec<VNode<Model>>,
 }

@@ -1,4 +1,5 @@
-use gtk::{GtkWindowExt, Window, WindowPosition, WindowType};
+use glib::IsA;
+use gtk::{Box, BoxExt, GtkWindowExt, Widget, Window, WindowPosition, WindowType};
 
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32;
@@ -52,5 +53,21 @@ impl WindowExtHelpers for Window {
 
     fn set_window_position(&self, window_position: WindowPosition) {
         self.set_property_window_position(window_position)
+    }
+}
+
+pub trait BoxExtHelpers: BoxExt {
+    fn get_child_center_widget<P: IsA<Widget>>(&self, child: &P) -> bool;
+    fn set_child_center_widget<P: IsA<Widget>>(&self, child: &P, center: bool);
+}
+
+impl BoxExtHelpers for Box {
+    fn get_child_center_widget<P: IsA<Widget>>(&self, _child: &P) -> bool {
+        // Always compare true, it's all taken care of in add_child().
+        true
+    }
+
+    fn set_child_center_widget<P: IsA<Widget>>(&self, _child: &P, _center: bool) {
+        // This is handled by add_child() rules. The setter is a no-op.
     }
 }
