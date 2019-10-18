@@ -52,6 +52,7 @@ pub fn main_quit(return_code: i32) {
 /// This is a shortcut for `Application::new()` (and etc), `vgtk::open` and
 /// `vgtk::run`, if you're building a simple app that doesn't need much
 /// interaction with the application or multiple toplevel windows.
+#[allow(unused_must_use)]
 pub fn go<C: 'static + Component>(name: &str, flags: ApplicationFlags) -> i32 {
     let app = Application::new(Some(name), flags).expect("Unable to create GtkApplication");
     app.set_default();
