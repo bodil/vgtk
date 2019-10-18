@@ -3,7 +3,7 @@ use glib::prelude::*;
 use glib::SignalHandlerId;
 use glib::{Object, Type};
 use gtk::prelude::*;
-use gtk::{self, Builder, Container, IconSize, Image, Widget, Window};
+use gtk::{self, Builder, Container, Widget, Window};
 use std::collections::HashMap;
 use std::collections::HashSet;
 

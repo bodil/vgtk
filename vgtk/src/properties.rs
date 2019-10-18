@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
-use glib::GString;
+use glib::{object::Cast, GString};
+use gtk::{IconSize, Image, ImageExt, Widget};
 
 pub struct PropertyValue<'a, A, Get, Set>
 where
@@ -118,6 +119,24 @@ impl<'a> PropertyValueCoerce<'a, Option<GString>> for String {
     }
 }
 
+impl<'a> PropertyValueCompare<'a, Option<Widget>> for Image {
+    fn property_compare(left: Option<Widget>, right: &Image) -> bool {
+        if let Some(left) = left {
+            if let Some(left) = left.downcast_ref::<Image>() {
+                return left.get_property_icon_name() == right.get_property_icon_name()
+                    && left.get_property_icon_size() == right.get_property_icon_size();
+            }
+        }
+        false
+    }
+}
+
+impl<'a> PropertyValueCoerce<'a, Option<&'a Image>> for Image {
+    fn property_coerce(value: &'a Image) -> Option<&'a Image> {
+        Some(value)
+    }
+}
+
 pub trait IntoPropertyValue<'a, A, Get, Set>
 where
     A: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set> + 'a,
@@ -149,5 +168,24 @@ where
 {
     fn into_property_value(self) -> PropertyValue<'a, String, Get, Set> {
         PropertyValue::new(self.to_string())
+    }
+}
+
+impl<'a, Get, Set> IntoPropertyValue<'a, Image, Get, Set> for (&'_ str, IconSize)
+where
+    Image: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set>,
+{
+    fn into_property_value(self) -> PropertyValue<'a, Image, Get, Set> {
+        let (name, size) = self;
+        PropertyValue::new(Image::new_from_icon_name(Some(name), size))
+    }
+}
+
+impl<'a, Get, Set> IntoPropertyValue<'a, Image, Get, Set> for &'_ str
+where
+    Image: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set>,
+{
+    fn into_property_value(self) -> PropertyValue<'a, Image, Get, Set> {
+        PropertyValue::new(Image::new_from_icon_name(Some(self), IconSize::Button))
     }
 }

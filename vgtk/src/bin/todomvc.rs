@@ -185,9 +185,8 @@ impl Component for Model {
                 <HeaderBar title="TodoMVC" subtitle="wtf do we do now" show_close_button=true />
                 <Box spacing=10 orientation={Orientation::Vertical}>
                     <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
-                        // FIXME: construct image from icon name string
-                        // <Button image="edit-select-all"
-                        //         always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
+                        <Button image="edit-select-all" relief={ReliefStyle::Half}
+                                always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
                         <Entry placeholder_text="What needs to be done?"
                                Box::expand=true Box::fill=true
                                on activate=|entry| {
@@ -241,8 +240,7 @@ fn render_item(index: usize, item: &Item) -> VNode<Model> {
                 <CheckButton active={item.done} on toggled=|_| {Msg::Toggle { index }} />
                 <Label label=label use_markup=true Box::fill=true />
                 <Button Box::pack_type={PackType::End} relief={ReliefStyle::None}
-                        // FIXME: allow string for image attribute
-                        // always_show_image=true image="edit-delete"
+                        always_show_image=true image="edit-delete"
                         on clicked=|_| {Msg::Remove { index }} />
             </Box>
         </ListBoxRow>

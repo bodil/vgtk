@@ -181,7 +181,7 @@ pub fn expand_property(
             let value = #value.into_property_value();
             VProperty {
                 name: #prop_name,
-                set: std::rc::Rc::new(move |object: &glib::Object, parent: Option<&Container>, force: bool| {
+                set: std::boxed::Box::new(move |object: &glib::Object, parent: Option<&Container>, force: bool| {
                     #setter_prelude
                     #setter_body
                 }),
@@ -206,7 +206,7 @@ pub fn expand_handler(
         handlers.push(VHandler {
             name: #signal_name,
             id: #signal_id,
-            set: std::rc::Rc::new(move |object: &glib::Object, scope: &Scope<_>| {
+            set: std::boxed::Box::new(move |object: &glib::Object, scope: &Scope<_>| {
                 let object: &#object_type = object.downcast_ref()
                       .unwrap_or_else(|| panic!("downcast to {:?} failed in signal setter", #object_type::static_type()));
                 let scope: Scope<_> = scope.clone();

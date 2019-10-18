@@ -1,8 +1,7 @@
 use std::borrow::Borrow;
-use std::rc::Rc;
 
-use glib::{object::Cast, signal::SignalHandlerId, GString, IsA, Object, Type};
-use gtk::{Container, IconSize, Image, ImageExt, Widget};
+use glib::{signal::SignalHandlerId, Object, Type};
+use gtk::Container;
 
 pub use crate::vcomp::VComponent;
 use crate::{Component, Scope};
@@ -19,10 +18,9 @@ pub struct VWidget<Model: Component> {
     pub children: Vec<VNode<Model>>,
 }
 
-#[derive(Clone)]
 pub struct VProperty {
     pub name: &'static str,
-    pub set: Rc<dyn Fn(&Object, Option<&Container>, bool) + 'static>,
+    pub set: Box<dyn Fn(&Object, Option<&Container>, bool) + 'static>,
 }
 
 impl<Model: Component> VWidget<Model> {
@@ -37,11 +35,10 @@ impl<Model: Component> VWidget<Model> {
     }
 }
 
-#[derive(Clone)]
 pub struct VHandler<Model: Component> {
     pub name: &'static str,
     pub id: &'static str,
-    pub set: Rc<dyn Fn(&Object, &Scope<Model>) -> SignalHandlerId>,
+    pub set: Box<dyn Fn(&Object, &Scope<Model>) -> SignalHandlerId>,
 }
 
 pub struct VNodeIterator<Model: Component> {
