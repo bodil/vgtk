@@ -23,8 +23,10 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - uses: actions/checkout@v1
-      - name: Run tests
-        run: cargo test --all-features
+      - name: Run tests in macros
+        run: cd macros; cargo test --all-features
+      - name: Run tests in lib
+        run: cd vgtk; cargo test --all-features
 
   clippy:
     runs-on: ubuntu-latest
