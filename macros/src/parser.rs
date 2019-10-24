@@ -1,4 +1,4 @@
-use proc_macro2::{Group, Ident, Literal, Punct, Span};
+use proc_macro2::{Delimiter, Group, Ident, Literal, Punct, Span};
 
 use crate::combo::*;
 use crate::context::{Attribute, GtkComponent, GtkElement, GtkWidget};
@@ -89,6 +89,15 @@ pub fn group<'a>() -> impl Parser<'a, Token, Group> {
     }
 }
 
+pub fn paren_group<'a>() -> impl Parser<'a, Token, Group> {
+    |input: &Cursor<'a, Token>| match input.get() {
+        Some(Token::Group(_, group)) if group.delimiter() == Delimiter::Parenthesis => {
+            ok(group.clone(), input, input.next())
+        }
+        _ => err(input, "a parenthesised block"),
+    }
+}
+
 pub fn rust_expr<'a>() -> impl Parser<'a, Token, Vec<Token>> {
     // TODO: currently only accepts literals, identifiers and blocks. JSX only
     // accepts strings and blocks, but I feel we could make more of an effort to
@@ -106,12 +115,13 @@ pub fn closure<'a>() -> impl Parser<'a, Token, (Vec<Token>, Vec<Token>)> {
     closure_args().pair(expect(rust_expr()))
 }
 
-pub fn property_attr<'a>() -> impl Parser<'a, Token, Attribute> {
-    rust_type_path
-        .pair(punct('=').right(expect(rust_expr())))
-        .map(|(mut parent, value)| {
+pub fn property_attr<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Attribute> {
+    optional(punct('@'))
+        .pair(rust_type_path.pair(punct('=').right(expect(rust_expr()))))
+        .map(|(qual, (mut parent, value))| {
             if let Some(Token::Ident(name)) = parent.pop() {
                 Attribute::Property {
+                    child: qual.is_none() && !parent.is_empty(),
                     parent,
                     name,
                     value,
@@ -120,18 +130,19 @@ pub fn property_attr<'a>() -> impl Parser<'a, Token, Attribute> {
                 panic!("unexpected token found, should have been Ident")
             }
         })
+        .parse(input)
 }
 
-pub fn handler_attr<'a>() -> impl Parser<'a, Token, Attribute> {
-    match_ident("on").right(expect(
-        ident()
-            .pair(punct('=').right(closure()))
-            .map(|(name, (args, body))| Attribute::Handler { name, args, body }),
-    ))
+pub fn handler_attr<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Attribute> {
+    match_ident("on")
+        .right(expect(ident().pair(punct('=').right(closure())).map(
+            |(name, (args, body))| Attribute::Handler { name, args, body },
+        )))
+        .parse(input)
 }
 
 pub fn attribute<'a>() -> impl Parser<'a, Token, Attribute> {
-    handler_attr().or(property_attr())
+    handler_attr.or(property_attr)
 }
 
 pub fn end_tag<'a>(expected: Ident) -> impl Parser<'a, Token, Ident> {
@@ -155,16 +166,36 @@ pub fn end_tag<'a>(expected: Ident) -> impl Parser<'a, Token, Ident> {
     )
 }
 
+pub fn widget_constructor<'a>(
+    input: &Cursor<'a, Token>,
+) -> ParseResult<'a, Token, (Ident, Option<Vec<Token>>)> {
+    pair(
+        ident(),
+        optional(pair(pair(punct(':'), punct(':')), pair(ident(), paren_group())).expect()),
+    )
+    .map(|(name, cons)| {
+        (
+            name,
+            cons.map(|((c1, c2), (cons, args))| {
+                [c1.into(), c2.into(), cons.into(), args.into()].to_vec()
+            }),
+        )
+    })
+    .parse(input)
+}
+
 pub fn widget<'a>() -> impl Parser<'a, Token, GtkWidget> {
-    let open = punct('<').right(ident().pair(attribute().repeat(0..)).expect());
-    open.and_then(move |(name, attributes)| {
+    let open = punct('<').right(widget_constructor.pair(attribute().repeat(0..)).expect());
+    open.and_then(move |((name, cons), attributes)| {
         let tag_name = name.clone();
         let name2 = name.clone();
+        let cons2 = cons.clone();
         let attrs2 = attributes.clone();
         punct('/')
             .left(punct('>').expect())
             .map(move |_| GtkWidget {
                 name: name.clone(),
+                constructor: cons.clone(),
                 attributes: attributes.clone(),
                 children: Vec::new(),
             })
@@ -172,6 +203,7 @@ pub fn widget<'a>() -> impl Parser<'a, Token, GtkWidget> {
                 punct('>').right(element().to_box().repeat(0..).left(end_tag(tag_name)).map(
                     move |children| GtkWidget {
                         name: name2.clone(),
+                        constructor: cons2.clone(),
                         attributes: attrs2.clone(),
                         children,
                     },
@@ -217,7 +249,7 @@ pub fn rust_type<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Vec<To
 
 pub fn component<'a>() -> impl Parser<'a, Token, GtkComponent> {
     let open =
-        punct('<').right(punct('@').right(rust_type.pair(property_attr().repeat(0..)).expect()));
+        punct('<').right(punct('@').right(rust_type.pair(property_attr.repeat(0..)).expect()));
     open.and_then(move |(name, attributes)| {
         punct('/')
             .left(punct('>').expect())
@@ -275,10 +307,10 @@ mod test {
     fn parse_elements() {
         let stream = unroll_stream(
             quote!(
-                <Window title="title" width=500>
-                    <Button label="wibble" />
+                <Window::new() title="title" width=500>
+                    <Button @Button::label="wibble" />
                     <Button on click=|_| {panic!()} label="wobble" />
-                    <Label label={omg.lol()} />
+                    <Label label={omg.lol()} Window::fill=true />
                 </Window>
             ),
             false,
@@ -291,7 +323,8 @@ mod test {
                 );
                 let mut children = window.children.iter();
                 let button1 = children.next().unwrap();
-                let button1 = assert_widget(("Button", &[("label", "\"wibble\"")]), button1);
+                let button1 =
+                    assert_widget(("Button", &[("@Button::label", "\"wibble\"")]), button1);
                 assert!(button1.children.is_empty());
                 let button2 = children.next().unwrap();
                 let button2 = assert_widget(
@@ -303,7 +336,13 @@ mod test {
                 );
                 assert!(button2.children.is_empty());
                 let label = children.next().unwrap();
-                let label = assert_widget(("Label", &[("label", "{omg . lol ( )}")]), label);
+                let label = assert_widget(
+                    (
+                        "Label",
+                        &[("label", "{omg . lol ( )}"), ("Window::fill", "true")],
+                    ),
+                    label,
+                );
                 assert!(label.children.is_empty());
                 assert!(children.next().is_none());
             }

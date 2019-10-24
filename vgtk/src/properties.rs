@@ -57,6 +57,24 @@ where
     }
 }
 
+impl<'a, A> PropertyValueCompare<'a, A> for &'a A
+where
+    A: PartialEq + 'a,
+{
+    fn property_compare(left: A, right: &&A) -> bool {
+        &left == *right
+    }
+}
+
+impl<'a, A> PropertyValueCoerce<'a, A> for &'a A
+where
+    A: Clone + 'a,
+{
+    fn property_coerce(value: &'a &'a A) -> A {
+        (*value).clone()
+    }
+}
+
 impl<'a, A> PropertyValueCompare<'a, &'a A> for A
 where
     A: PartialEq + 'a,
@@ -159,6 +177,16 @@ where
 {
     fn into_property_value(self) -> PropertyValue<'a, A, Get, Set> {
         PropertyValue::new(self.clone())
+    }
+}
+
+impl<'a, A, Get, Set> IntoPropertyValue<'a, Option<A>, Get, Set> for Option<&'a A>
+where
+    A: Clone,
+    Option<A>: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set> + Clone + 'a,
+{
+    fn into_property_value(self) -> PropertyValue<'a, Option<A>, Get, Set> {
+        PropertyValue::new(self.cloned())
     }
 }
 

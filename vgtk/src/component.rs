@@ -4,8 +4,8 @@ use glib::futures::{
     task::Context,
     Future, Poll, StreamExt,
 };
-use gtk::Container;
-use gtk::Widget;
+use glib::{ObjectExt, WeakRef};
+use gtk::{Container, Widget};
 
 use std::any::TypeId;
 use std::fmt::Debug;
@@ -19,7 +19,9 @@ use crate::vnode::VNode;
 pub trait Component: Default + Unpin {
     type Message: Clone + Send + Debug;
     type Properties: Clone + Default;
-    fn update(&mut self, msg: Self::Message) -> bool;
+    fn update(&mut self, _msg: Self::Message) -> bool {
+        false
+    }
 
     fn create(_props: Self::Properties) -> Self {
         Self::default()
@@ -34,6 +36,14 @@ pub trait Component: Default + Unpin {
     fn unmounted(&mut self) {}
 
     fn view(&self) -> VNode<Self>;
+}
+
+impl Component for () {
+    type Message = ();
+    type Properties = ();
+    fn view(&self) -> VNode<Self> {
+        unimplemented!("tried to render a null component")
+    }
 }
 
 pub(crate) enum ComponentMessage<C: Component> {
@@ -139,7 +149,10 @@ where
                     self.scope.unmute();
                     return Poll::Pending;
                 }
-                Poll::Ready(None) => return Poll::Ready(()),
+                Poll::Ready(None) => {
+                    println!("task terminating because channel handles all dropped");
+                    return Poll::Ready(());
+                }
                 Poll::Pending => return Poll::Pending,
             }
         }
@@ -150,9 +163,9 @@ where
     }
 
     pub(crate) fn current_parent_scope() -> Scope<C> {
-        PARENT_SCOPE.with(|key| {
+        LOCAL_CONTEXT.with(|key| {
             let lock = key.read().unwrap();
-            match &*lock {
+            match &lock.parent_scope {
                 None => panic!("current task has no parent scope set!"),
                 Some(any_scope) => match any_scope.try_get::<C>() {
                     None => panic!(
@@ -166,8 +179,23 @@ where
     }
 }
 
+pub fn current_widget() -> Option<Widget> {
+    LOCAL_CONTEXT.with(|key| {
+        let lock = key.read().unwrap();
+        lock.current_widget
+            .as_ref()
+            .and_then(|widget| widget.upgrade())
+    })
+}
+
+#[derive(Default)]
+struct LocalContext {
+    parent_scope: Option<AnyScope>,
+    current_widget: Option<WeakRef<Widget>>,
+}
+
 thread_local! {
-    static PARENT_SCOPE: RwLock<Option<AnyScope>> = RwLock::new(None)
+    static LOCAL_CONTEXT: RwLock<LocalContext> = RwLock::new(Default::default())
 }
 
 impl<C, P> Future for ComponentTask<C, P>
@@ -178,12 +206,15 @@ where
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
-        PARENT_SCOPE.with(|key| {
-            *key.write().unwrap() = self.parent_scope.clone().map(Into::into);
+        LOCAL_CONTEXT.with(|key| {
+            *key.write().unwrap() = LocalContext {
+                parent_scope: self.parent_scope.as_ref().map(|scope| scope.clone().into()),
+                current_widget: Some(self.ui_state.object().downgrade()),
+            };
         });
         let polled = self.get_mut().process(ctx);
-        PARENT_SCOPE.with(|key| {
-            *key.write().unwrap() = None;
+        LOCAL_CONTEXT.with(|key| {
+            *key.write().unwrap() = Default::default();
         });
         polled
     }

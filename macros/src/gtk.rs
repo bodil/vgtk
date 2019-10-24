@@ -14,11 +14,11 @@ fn count_attributes(attributes: &[Attribute]) -> (usize, usize, usize) {
     let mut handlers = 0;
     for attribute in attributes {
         match attribute {
-            Attribute::Property { parent, .. } => {
-                if parent.is_empty() {
-                    props += 1
-                } else {
+            Attribute::Property { child, .. } => {
+                if *child {
                     child_props += 1
+                } else {
+                    props += 1
                 }
             }
             Attribute::Handler { .. } => handlers += 1,
@@ -45,16 +45,20 @@ pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
     for attribute in &gtk.attributes {
         out.extend(match attribute {
             Attribute::Property {
+                child,
                 parent,
                 name,
                 value,
             } => {
-                if !parent.is_empty() {
-                    let prop = expand_property(None, parent, name, value);
+                if *child {
+                    let prop = expand_property(None, *child, parent, name, value);
                     quote!(
                         vcomp.child_props.push(#prop);
                     )
                 } else {
+                    if !parent.is_empty() {
+                        panic!("component attributes cannot have paths");
+                    }
                     let value = to_stream(value);
                     quote!(
                         props.#name = PropTransform::transform(&vcomp, #value);
@@ -85,27 +89,41 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
         use vgtk::vnode::{VNode, VHandler, VProperty, VWidget, VComponent};
         use vgtk::Scope;
         use glib::StaticType;
+        use std::vec::Vec;
         let object_type = #name::static_type();
         let mut properties = Vec::with_capacity(#prop_count);
         let mut child_props = Vec::with_capacity(#child_prop_count);
         let mut handlers = Vec::with_capacity(#handler_count);
         let mut children = Vec::new();
     );
+    if let Some(ref cons) = gtk.constructor {
+        let cons = to_stream(cons.iter());
+        out.extend(quote!(
+            let constructor: Option<std::boxed::Box<dyn Fn() -> glib::Object>> = Some(std::boxed::Box::new(move || {
+                glib::object::Cast::upcast::<glib::Object>(#name#cons)
+            }));
+        ));
+    } else {
+        out.extend(quote!(
+            let constructor = None;
+        ));
+    }
     for attribute in &gtk.attributes {
         out.extend(match attribute {
             Attribute::Property {
+                child,
                 parent,
                 name,
                 value,
             } => {
-                let prop = expand_property(Some(&gtk.name), &parent, &name, &value);
-                if parent.is_empty() {
+                let prop = expand_property(Some(&gtk.name), *child, &parent, &name, &value);
+                if *child {
                     quote!(
-                        properties.push(#prop);
+                        child_props.push(#prop);
                     )
                 } else {
                     quote!(
-                        child_props.push(#prop);
+                        properties.push(#prop);
                     )
                 }
             }
@@ -130,6 +148,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
         #out
         VNode::Widget(VWidget {
             object_type,
+            constructor,
             properties,
             child_props,
             handlers,
@@ -140,11 +159,12 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
 
 pub fn expand_property(
     object_type: Option<&Ident>,
+    child_prop: bool,
     parent: &[Token],
     name: &Ident,
     value: &[Token],
 ) -> TokenStream {
-    let child_prefix = if !parent.is_empty() { "child_" } else { "" };
+    let child_prefix = if child_prop { "child_" } else { "" };
     let mut parent_type: Vec<Token> = parent.to_vec();
     while let Some(Token::Punct(_, _)) = parent_type.last() {
         parent_type.pop();
@@ -171,12 +191,20 @@ pub fn expand_property(
                   .expect("downcast to Widget failed in property setter");
         )
     };
-    let setter_body = if parent.is_empty() {
-        quote!(
-            if force || !value.compare(object.#getter()) {
-                object.#setter(value.coerce());
-            }
-        )
+    let setter_body = if !child_prop {
+        if parent_type.is_empty() {
+            quote!(
+                if force || !value.compare(object.#getter()) {
+                    object.#setter(value.coerce());
+                }
+            )
+        } else {
+            quote!(
+                if force || !value.compare(#parent_type::#getter(object)) {
+                    #parent_type::#setter(object, value.coerce());
+                }
+            )
+        }
     } else {
         quote!(
             let parent: &#parent_type = parent.expect("child attribute without a reachable parent").downcast_ref()

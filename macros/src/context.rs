@@ -7,6 +7,7 @@ use crate::lexer::Token;
 #[derive(Debug, Clone)]
 pub struct GtkWidget {
     pub name: Ident,
+    pub constructor: Option<Vec<Token>>,
     pub attributes: Vec<Attribute>,
     pub children: Vec<GtkElement>,
 }
@@ -27,6 +28,7 @@ pub enum GtkElement {
 #[derive(Clone)]
 pub enum Attribute {
     Property {
+        child: bool,
         parent: Vec<Token>,
         name: Ident,
         value: Vec<Token>,
@@ -51,21 +53,19 @@ impl Debug for Attribute {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
             Attribute::Property {
+                child,
                 parent,
                 name,
                 value,
             } => {
                 let attrs: Vec<String> = value.iter().map(stringify_attr_value).collect();
-                write!(
-                    f,
-                    "( {}{} = {} )",
-                    parent
-                        .iter()
-                        .map(|p| format!("{}::", p))
-                        .collect::<String>(),
-                    name.to_string(),
-                    attrs.join(", ")
-                )
+                let mut name = name.to_string();
+                if !parent.is_empty() {
+                    let parent_path: String = parent.iter().map(|p| format!("{}", p)).collect();
+                    let qual = if *child { "" } else { "@" };
+                    name = format!("{}{}{}", qual, parent_path, name);
+                }
+                write!(f, "( {} = {} )", name, attrs.join(", "))
             }
             Attribute::Handler { name, args, body } => {
                 let args: Vec<String> = args.iter().map(stringify_attr_value).collect();
@@ -86,18 +86,17 @@ impl PartialEq<(&str, &str)> for Attribute {
     fn eq(&self, other: &(&str, &str)) -> bool {
         match self {
             Attribute::Property {
+                child,
                 parent,
                 name,
                 value,
             } => {
-                let name = format!(
-                    "{}{}",
-                    parent
-                        .iter()
-                        .map(|p| format!("{}::", p))
-                        .collect::<String>(),
-                    name.to_string()
-                );
+                let mut name = name.to_string();
+                if !parent.is_empty() {
+                    let parent_path: String = parent.iter().map(|p| format!("{}", p)).collect();
+                    let qual = if *child { "" } else { "@" };
+                    name = format!("{}{}{}", qual, parent_path, name);
+                }
                 name == other.0 && stringify_attr_value(&value[0]) == other.1
             }
             Attribute::Handler { name, .. } => {

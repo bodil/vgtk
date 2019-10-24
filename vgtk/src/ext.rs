@@ -1,5 +1,9 @@
-use glib::IsA;
-use gtk::{Box, BoxExt, GtkWindowExt, Widget, Window, WindowPosition, WindowType};
+use gdk_pixbuf::Pixbuf;
+use glib::{GString, IsA};
+use gtk::{
+    Box, BoxExt, GtkWindowExt, Image, ImageExt, Label, LabelExt, Widget, Window, WindowPosition,
+    WindowType,
+};
 
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32;
@@ -69,5 +73,25 @@ impl BoxExtHelpers for Box {
 
     fn set_child_center_widget<P: IsA<Widget>>(&self, _child: &P, _center: bool) {
         // This is handled by add_child() rules. The setter is a no-op.
+    }
+}
+
+pub trait ImageExtHelpers: ImageExt {
+    fn set_pixbuf(&self, pixbuf: Option<Pixbuf>);
+}
+
+impl ImageExtHelpers for Image {
+    fn set_pixbuf(&self, pixbuf: Option<Pixbuf>) {
+        self.set_from_pixbuf(pixbuf.as_ref());
+    }
+}
+
+pub trait LabelExtHelpers: LabelExt {
+    fn get_markup(&self) -> Option<GString>;
+}
+
+impl LabelExtHelpers for Label {
+    fn get_markup(&self) -> Option<GString> {
+        self.get_label()
     }
 }

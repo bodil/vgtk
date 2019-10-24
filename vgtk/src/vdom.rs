@@ -1,9 +1,9 @@
 use glib::futures::channel::mpsc::UnboundedSender;
-use glib::prelude::*;
-use glib::SignalHandlerId;
-use glib::{Object, Type};
-use gtk::prelude::*;
-use gtk::{self, Box as GtkBox, Builder, Container, Widget, Window};
+use glib::{prelude::*, Object, SignalHandlerId};
+use gtk::{
+    self, prelude::*, Bin, Box as GtkBox, Builder, Container, Dialog, Menu, MenuButton, MenuItem,
+    Widget, Window,
+};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -64,18 +64,23 @@ impl<Model: 'static + Component> State<Model> {
     }
 }
 
-fn build_obj<A: IsA<Object>>(class: Type) -> A {
-    let mut ui = String::new();
-    ui += &format!("<interface><object class=\"{}\"", class);
-    ui += "/></interface>";
+fn build_obj<A: IsA<Object>, Model: Component>(spec: &VWidget<Model>) -> A {
+    let class = spec.object_type;
+    let obj = if let Some(ref cons) = spec.constructor {
+        cons()
+    } else {
+        let mut ui = String::new();
+        ui += &format!("<interface><object class=\"{}\"", class);
+        ui += "/></interface>";
 
-    let builder = Builder::new_from_string(&ui);
-    let objects = builder.get_objects();
-    objects
-        .last()
-        .unwrap_or_else(|| panic!("unknown class {}", class))
-        .clone()
-        .downcast::<A>()
+        let builder = Builder::new_from_string(&ui);
+        let objects = builder.get_objects();
+        objects
+            .last()
+            .unwrap_or_else(|| panic!("unknown class {}", class))
+            .clone()
+    };
+    obj.downcast::<A>()
         .unwrap_or_else(|_| panic!("build_obj: cannot cast {} to {}", class, A::static_type()))
 }
 
@@ -183,7 +188,38 @@ fn add_child<Model: Component>(
     child_spec: &VNode<Model>,
     child: &Widget,
 ) {
-    if let Some(window) = parent.downcast_ref::<Window>() {
+    if let Some(button) = parent.downcast_ref::<MenuButton>() {
+        // MenuButton: can only have a single child, either a `Menu` set with
+        // `set_popup` or any other `Widget` set with `set_popover`.
+        if total > 1 {
+            panic!(
+                "MenuButton can only have 1 child, but {} were found.",
+                total,
+            );
+        }
+        if let Some(menu) = child.downcast_ref::<Menu>() {
+            button.set_popup(Some(menu));
+        } else {
+            button.set_popover(Some(child));
+        }
+    } else if let Some(item) = parent.downcast_ref::<MenuItem>() {
+        // MenuItem: single child, must be a `Menu`, set with `set_submenu`.
+        if total > 1 {
+            panic!("MenuItem can only have 1 child, but {} were found.", total);
+        }
+        if let Some(menu) = child.downcast_ref::<Menu>() {
+            item.set_submenu(Some(menu));
+        } else {
+            panic!(
+                "MenuItem can only take children of type Menu, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(dialog) = parent.downcast_ref::<Dialog>() {
+        // Dialog: children must be added to the Dialog's content area through
+        // get_content_area().
+        dialog.get_content_area().add(child);
+    } else if let Some(window) = parent.downcast_ref::<Window>() {
         // Window: if 1 child, it's the window's main widget. If 2 children, the
         // first is the title bar and the second is the main widget. More than 2
         // is not ok.
@@ -198,6 +234,12 @@ fn add_child<Model: Component>(
         } else {
             window.add(child);
         }
+    } else if let Some(parent) = parent.downcast_ref::<Bin>() {
+        // Bin: can only have a single child.
+        if total > 1 {
+            panic!("Bins can only have 1 child, but {} were found.", total);
+        }
+        parent.add(child);
     } else if let Some(parent) = parent.downcast_ref::<GtkBox>() {
         // Box: added normally, except one widget can be added using
         // set_center_widget() if it has the center_widget=true child property
@@ -220,7 +262,7 @@ fn add_child<Model: Component>(
 impl<Model: 'static + Component> GtkState<Model> {
     pub fn build(vobj: &VWidget<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
         // Build this object
-        let object = build_obj::<Widget>(vobj.object_type);
+        let object = build_obj::<Widget, _>(vobj);
 
         // Apply properties
         for prop in &vobj.properties {

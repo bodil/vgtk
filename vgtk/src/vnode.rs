@@ -32,6 +32,7 @@ impl<Model: Component> VNode<Model> {
 
 pub struct VWidget<Model: Component> {
     pub object_type: Type,
+    pub constructor: Option<Box<dyn Fn() -> Object>>,
     pub properties: Vec<VProperty>,
     pub child_props: Vec<VProperty>,
     pub handlers: Vec<VHandler<Model>>,

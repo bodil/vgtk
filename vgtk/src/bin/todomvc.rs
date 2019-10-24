@@ -1,23 +1,21 @@
 #![recursion_limit = "16384"]
 
-extern crate gio;
-extern crate glib;
-extern crate gtk;
-extern crate strum;
 #[macro_use]
 extern crate strum_macros;
 
 #[macro_use]
 extern crate vgtk;
 
+use gdk_pixbuf::Pixbuf;
 use std::fmt::{Debug, Display};
 
 use strum::IntoEnumIterator;
 
-use gio::ApplicationFlags;
+use gio::{ApplicationFlags, Cancellable, MemoryInputStream};
+use glib::Bytes;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{ext::*, go, vnode::VNode, Callback, Component};
+use vgtk::{ext::*, go, run_dialog, vnode::VNode, Callback, Component};
 
 #[derive(Clone, Debug, Default)]
 struct Radio<Enum: Unpin> {
@@ -152,6 +150,7 @@ enum Msg {
     ToggleAll,
     ClearCompleted,
     Exit,
+    MenuAbout,
 }
 
 impl Component for Model {
@@ -175,6 +174,7 @@ impl Component for Model {
             Msg::Exit => {
                 vgtk::main_quit(0);
             }
+            Msg::MenuAbout => AboutDialog::run(),
         }
         true
     }
@@ -182,7 +182,14 @@ impl Component for Model {
     fn view(&self) -> VNode<Model> {
         gtk! {
             <Window default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
-                <HeaderBar title="TodoMVC" subtitle="wtf do we do now" show_close_button=true />
+                <HeaderBar title="TodoMVC" subtitle="wtf do we do now" show_close_button=true>
+                    <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
+                                image="open-menu-symbolic">
+                        <Menu>
+                            <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
+                        </Menu>
+                    </MenuButton>
+                </HeaderBar>
                 <Box spacing=10 orientation={Orientation::Vertical}>
                     <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
                         <Button image="edit-select-all" relief={ReliefStyle::Half}
@@ -207,7 +214,7 @@ impl Component for Model {
                     </ScrolledWindow>
                     <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
                         <Label label={self.left_label()}/>
-                        <@Radio<Filter> Box::center_widget=true active={self.filter} on_changed={|filter| Msg::Filter { filter }} />
+                        <@Radio<Filter> active={self.filter} Box::center_widget=true on_changed={|filter| Msg::Filter { filter }} />
                         {
                             if self.filter(Filter::Completed).count() > 0 {
                                 (gtk!{
@@ -244,6 +251,59 @@ fn render_item(index: usize, item: &Item) -> VNode<Model> {
                         on clicked=|_| {Msg::Remove { index }} />
             </Box>
         </ListBoxRow>
+    }
+}
+
+struct AboutDialog {
+    dog: Pixbuf,
+}
+
+static DOG: &[u8] = include_bytes!("dog.png");
+
+impl Default for AboutDialog {
+    fn default() -> Self {
+        let data_stream = MemoryInputStream::new_from_bytes(&Bytes::from_static(DOG));
+        let dog = Pixbuf::new_from_stream(&data_stream, None as Option<&Cancellable>).unwrap();
+        AboutDialog { dog }
+    }
+}
+
+impl Component for AboutDialog {
+    type Message = ();
+    type Properties = ();
+
+    fn update(&mut self, _msg: Self::Message) -> bool {
+        false
+    }
+
+    fn view(&self) -> VNode<Self> {
+        gtk! {
+            <Dialog::new_with_buttons(
+                Some("About TodoMVC"),
+                None as Option<&Window>,
+                DialogFlags::MODAL,
+                &[("Ok", ResponseType::Ok)]
+            )>
+                <Box spacing=10 orientation={Orientation::Vertical}>
+                    <Image pixbuf={Some(self.dog.clone())}/>
+                    <Label justify={Justification::Center} markup="<big><b>VGTK TodoMVC</b></big>\norg-mode for dummies!"/>
+                    <Label markup="<a href=\"https://github.com/bodil/vgtk\">https://github.com/bodil/vgtk</a>"/>
+                </Box>
+            </Dialog>
+        }
+    }
+}
+
+impl AboutDialog {
+    fn run() {
+        println!(
+            "Response type: {:?}",
+            run_dialog::<Self>(
+                vgtk::current_widget()
+                    .and_then(|w| w.get_parent_window())
+                    .as_ref(),
+            )
+        );
     }
 }
 

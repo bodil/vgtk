@@ -1,9 +1,10 @@
-use glib::futures::{Future, };
+use glib::futures::Future;
 use glib::{MainContext, MainLoop as GMainLoop};
 use std::cell::Cell;
 use std::rc::Rc;
 
 pub trait MainLoop: Clone {
+    fn sub_loop(&self) -> Self;
     fn quit(&self, return_code: i32);
     fn run(&self) -> i32;
     fn context(&self) -> MainContext;
@@ -29,6 +30,13 @@ impl GtkMainLoop {
 }
 
 impl MainLoop for GtkMainLoop {
+    fn sub_loop(&self) -> Self {
+        GtkMainLoop {
+            main_loop: GMainLoop::new(Some(&self.context()), false),
+            return_code: self.return_code.clone(),
+        }
+    }
+
     fn quit(&self, return_code: i32) {
         self.return_code.set(return_code);
         self.main_loop.quit();
@@ -45,7 +53,7 @@ impl MainLoop for GtkMainLoop {
 
     fn spawn<T>(&self, task: T)
     where
-        T: 'static + Future<Output=()>,
+        T: 'static + Future<Output = ()>,
     {
         let context = self.context();
         if context.acquire() {

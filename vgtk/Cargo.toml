@@ -11,6 +11,7 @@ glib-sys = "0.9.0"
 gtk-sys = "0.9.0"
 gobject-sys = "0.9.0"
 glib = "0.8.0"
+gdk = "0.11.0"
 gdk-pixbuf = "0.7.0"
 vgtk-macros = { path = "../macros" }
 proc-macro-hack = "0.5.10"

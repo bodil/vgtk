@@ -17,6 +17,7 @@ pub use vgtk_macros::gtk;
 use std::cell::Cell;
 use std::sync::Mutex;
 
+use gdk::Window as GdkWindow;
 use gio::prelude::*;
 use gio::{ApplicationFlags, Cancellable};
 use glib::futures::{
@@ -26,12 +27,12 @@ use glib::futures::{
 use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
-use gtk::{Application, Window};
+use gtk::{Application, Dialog, ResponseType, Window};
 
 use crate::component::{ComponentMessage, ComponentTask};
 
 pub use crate::callback::Callback;
-pub use crate::component::Component;
+pub use crate::component::{current_widget, Component};
 pub use crate::event::{Event, SignalHandler};
 pub use crate::mainloop::{GtkMainLoop, MainLoop};
 pub use crate::scope::Scope;
@@ -63,6 +64,19 @@ pub fn go<C: 'static + Component>(name: &str, flags: ApplicationFlags) -> i32 {
     run()
 }
 
+pub fn build<C: 'static + Component>() -> Window {
+    let (_scope, channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
+    let window: Window = task
+        .widget()
+        .downcast()
+        .expect("Application top level widget must be a Window");
+    // MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
+    MainContext::ref_thread_default().spawn_local(task);
+    window.show_all();
+    channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+    window
+}
+
 /// Launch a `Window` component and open it when the `Application` activates.
 ///
 /// You can call this at any time, regardless of whether the application has
@@ -77,14 +91,7 @@ pub fn open<C: 'static + Component>(
     // at least not by Gtk, but just in case, let's Mutex up.
     let notify = Mutex::new(Cell::new(Some(notify)));
     app.connect_activate(move |_| {
-        let (_scope, channel, task) = ComponentTask::<C, C>::new(Default::default(), None, None);
-        let window: Window = task
-            .widget()
-            .downcast()
-            .expect("Application top level widget must be a Window");
-        MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
-        window.show_all();
-        channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+        let window = build::<C>();
         if let Some(notify) = notify.lock().unwrap().take() {
             // The caller might not have cared about the return value, so the
             // receiver might be gone when we try to send to it. In this case,
@@ -95,6 +102,27 @@ pub fn open<C: 'static + Component>(
         }
     });
     result
+}
+
+pub fn run_dialog<C: 'static + Component>(parent: Option<&GdkWindow>) -> ResponseType {
+    let (_scope, channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
+    let dialog: Dialog = task
+        .widget()
+        .downcast()
+        .expect("Dialog must be a gtk::Dialog");
+    if let Some(parent) = parent {
+        dialog.set_parent_window(parent);
+    }
+    let task = Mutex::new(Cell::new(Some(task)));
+    dialog.connect_map(move |_| {
+        if let Some(task) = task.lock().unwrap().take() {
+            MainContext::ref_thread_default().spawn_local(task);
+        }
+        channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+    });
+    let response = dialog.run();
+    dialog.destroy();
+    response
 }
 
 /// Run the Gtk main loop until termination.
