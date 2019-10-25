@@ -1,16 +1,13 @@
 mod callback;
 mod component;
-mod event;
 pub mod ext;
 mod mainloop;
 pub mod properties;
 mod scope;
-pub mod vcomp;
 mod vdom;
-pub mod vnode;
+mod vnode;
 
 use proc_macro_hack::proc_macro_hack;
-
 #[proc_macro_hack(support_nested)]
 pub use vgtk_macros::gtk;
 
@@ -30,13 +27,12 @@ use gtk::prelude::*;
 use gtk::{Application, Dialog, ResponseType, Window};
 
 use crate::component::{ComponentMessage, ComponentTask};
+use crate::mainloop::{GtkMainLoop, MainLoop};
 
 pub use crate::callback::Callback;
 pub use crate::component::{current_widget, Component};
-pub use crate::event::{Event, SignalHandler};
-pub use crate::mainloop::{GtkMainLoop, MainLoop};
 pub use crate::scope::Scope;
-pub use crate::vcomp::VComponent;
+pub use vnode::{PropTransform, VComponent, VHandler, VNode, VProperty, VWidget};
 
 thread_local! {
     pub static MAIN_LOOP: GtkMainLoop = GtkMainLoop::new(MainContext::default());

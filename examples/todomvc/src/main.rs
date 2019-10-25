@@ -15,7 +15,7 @@ use gio::{ApplicationFlags, Cancellable, MemoryInputStream};
 use glib::Bytes;
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{ext::*, go, run_dialog, vnode::VNode, Callback, Component};
+use vgtk::{ext::*, go, run_dialog, Callback, Component, VNode};
 
 #[derive(Clone, Debug, Default)]
 struct Radio<Enum: Unpin> {

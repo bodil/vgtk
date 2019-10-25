@@ -1,67 +1,21 @@
-use glib::futures::channel::mpsc::UnboundedSender;
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
     self, prelude::*, Bin, Box as GtkBox, Builder, Container, Dialog, Menu, MenuButton, MenuItem,
     Widget, Window,
 };
-use std::collections::HashMap;
-use std::collections::HashSet;
 
-use std::any::TypeId;
-use std::marker::PhantomData;
-
-use crate::component::{Component, ComponentMessage, ComponentTask};
-use crate::mainloop::MainLoop;
+use super::State;
+use crate::component::Component;
 use crate::scope::Scope;
-use crate::vcomp::AnyProps;
-use crate::vnode::{VComponent, VHandler, VNode, VProperty, VWidget};
+use crate::vnode::{VHandler, VNode, VProperty, VWidget};
 
-pub enum State<Model: Component> {
-    Gtk(GtkState<Model>),
-    Component(ComponentState<Model>),
-}
-
-impl<Model: 'static + Component> State<Model> {
-    /// Build a state from a `VItem` spec.
-    pub fn build(vnode: &VNode<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
-        match vnode {
-            VNode::Widget(widget) => State::Gtk(GtkState::build(widget, parent, scope)),
-            VNode::Component(vcomp) => {
-                let comp = (vcomp.constructor)(&vcomp.props, parent, &vcomp.child_props, scope);
-                State::Component(comp)
-            }
-        }
-    }
-
-    /// Patch a state in place with a `VItem` spec.
-    ///
-    /// Returns true if patching succeeded, or false if a rebuild is required.
-    #[must_use]
-    pub fn patch(
-        &mut self,
-        vnode: &VNode<Model>,
-        parent: Option<&Container>,
-        scope: &Scope<Model>,
-    ) -> bool {
-        match vnode {
-            VNode::Widget(widget) => match self {
-                State::Gtk(state) => state.patch(widget, parent, scope),
-                State::Component(_) => false,
-            },
-            VNode::Component(vcomp) => match self {
-                State::Component(state) => state.patch(vcomp, parent, scope),
-                State::Gtk(_) => false,
-            },
-        }
-    }
-
-    /// Get the Gtk `Widget` represented by this state.
-    pub fn object(&self) -> &Widget {
-        match self {
-            State::Gtk(state) => &state.object,
-            State::Component(state) => &state.object,
-        }
-    }
+pub struct GtkState<Model: Component> {
+    pub object: Widget,
+    handlers: HashMap<(&'static str, &'static str), SignalHandlerId>,
+    children: Vec<State<Model>>,
 }
 
 fn build_obj<A: IsA<Object>, Model: Component>(spec: &VWidget<Model>) -> A {
@@ -82,100 +36,6 @@ fn build_obj<A: IsA<Object>, Model: Component>(spec: &VWidget<Model>) -> A {
     };
     obj.downcast::<A>()
         .unwrap_or_else(|_| panic!("build_obj: cannot cast {} to {}", class, A::static_type()))
-}
-
-trait PropertiesReceiver {
-    fn update(&mut self, props: &AnyProps);
-    fn unmounting(&self);
-}
-
-pub struct ComponentState<Model: Component> {
-    parent: PhantomData<Model>,
-    object: Widget,
-    model_type: TypeId,
-    state: Box<dyn PropertiesReceiver>,
-}
-
-impl<Model: 'static + Component> ComponentState<Model> {
-    pub fn build<Child: 'static + Component>(
-        props: &AnyProps,
-        parent: Option<&Container>,
-        child_props: &[VProperty],
-        scope: &Scope<Model>,
-    ) -> Self {
-        let (sub_state, object) =
-            SubcomponentState::<Child>::new(props, parent, child_props, scope);
-        ComponentState {
-            parent: PhantomData,
-            object,
-            model_type: TypeId::of::<Child>(),
-            state: Box::new(sub_state),
-        }
-    }
-
-    pub fn patch(
-        &mut self,
-        spec: &VComponent<Model>,
-        parent: Option<&Container>,
-        _scope: &Scope<Model>,
-    ) -> bool {
-        if self.model_type == spec.model_type {
-            // Components have same type; update props
-            for prop in &spec.child_props {
-                (prop.set)(self.object.upcast_ref(), parent, false);
-            }
-            self.state.update(&spec.props);
-            true
-        } else {
-            // Component type changed; need to rebuild
-            self.state.unmounting();
-            false
-        }
-    }
-}
-
-pub struct SubcomponentState<Model: Component> {
-    channel: UnboundedSender<ComponentMessage<Model>>,
-}
-
-impl<Model: 'static + Component> SubcomponentState<Model> {
-    fn new<P: 'static + Component>(
-        props: &AnyProps,
-        parent: Option<&Container>,
-        child_props: &[VProperty],
-        parent_scope: &Scope<P>,
-    ) -> (Self, Widget) {
-        let props: Model::Properties = props.unwrap();
-        let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
-        let widget = task.widget();
-        for prop in child_props {
-            (prop.set)(widget.upcast_ref(), parent, true);
-        }
-
-        crate::MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
-        (SubcomponentState { channel }, widget)
-    }
-}
-
-impl<Model: 'static + Component> PropertiesReceiver for SubcomponentState<Model> {
-    fn update(&mut self, raw_props: &AnyProps) {
-        let props = raw_props.unwrap();
-        self.channel
-            .unbounded_send(ComponentMessage::Props(props))
-            .expect("failed to send props message over system channel")
-    }
-
-    fn unmounting(&self) {
-        self.channel
-            .unbounded_send(ComponentMessage::Unmounted)
-            .expect("failed to send unmount message over system channel")
-    }
-}
-
-pub struct GtkState<Model: Component> {
-    object: Widget,
-    handlers: HashMap<(&'static str, &'static str), SignalHandlerId>,
-    children: Vec<State<Model>>,
 }
 
 // Gtk has many strange ways of adding children to a parent.

@@ -1,10 +1,14 @@
-use std::borrow::Borrow;
+use crate::Component;
 
-use glib::{signal::SignalHandlerId, Object, Type};
-use gtk::Container;
+pub(crate) mod component;
+mod handler;
+mod property;
+mod widget;
 
-pub use crate::vcomp::VComponent;
-use crate::{Component, Scope};
+pub use component::{PropTransform, VComponent};
+pub use handler::VHandler;
+pub use property::VProperty;
+pub use widget::VWidget;
 
 pub enum VNode<Model: Component> {
     Widget(VWidget<Model>),
@@ -28,38 +32,6 @@ impl<Model: Component> VNode<Model> {
         }
         None
     }
-}
-
-pub struct VWidget<Model: Component> {
-    pub object_type: Type,
-    pub constructor: Option<Box<dyn Fn() -> Object>>,
-    pub properties: Vec<VProperty>,
-    pub child_props: Vec<VProperty>,
-    pub handlers: Vec<VHandler<Model>>,
-    pub children: Vec<VNode<Model>>,
-}
-
-pub struct VProperty {
-    pub name: &'static str,
-    pub set: Box<dyn Fn(&Object, Option<&Container>, bool) + 'static>,
-}
-
-impl<Model: Component> VWidget<Model> {
-    pub fn get_prop<S: Borrow<str>>(&self, name: S) -> Option<&VProperty> {
-        let name = name.borrow();
-        for prop in &self.properties {
-            if prop.name == name {
-                return Some(prop);
-            }
-        }
-        None
-    }
-}
-
-pub struct VHandler<Model: Component> {
-    pub name: &'static str,
-    pub id: &'static str,
-    pub set: Box<dyn Fn(&Object, &Scope<Model>) -> SignalHandlerId>,
 }
 
 pub struct VNodeIterator<Model: Component> {

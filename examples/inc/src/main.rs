@@ -1,6 +1,6 @@
 use gio::ApplicationFlags;
 use gtk::{prelude::*, Align, Box, Button, HeaderBar, Label, Window};
-use vgtk::{go, gtk, vnode::VNode, Component};
+use vgtk::{go, gtk, Component, VNode};
 
 #[derive(Clone, Debug, Default)]
 struct Model {
