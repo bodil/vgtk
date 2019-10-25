@@ -1,20 +1,25 @@
-use glib::futures::channel::mpsc::UnboundedSender;
-use std::sync::atomic::AtomicPtr;
-
 use std::any::TypeId;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicPtr, AtomicUsize, Ordering},
+    Arc,
+};
+
+use log::debug;
+
+use glib::futures::channel::mpsc::UnboundedSender;
 
 use crate::component::{Component, ComponentTask};
 
 pub struct Scope<C: Component> {
+    name: &'static str,
     muted: Arc<AtomicUsize>,
     channel: UnboundedSender<C::Message>,
 }
 
 impl<C: Component> Scope<C> {
-    pub(crate) fn new(channel: UnboundedSender<C::Message>) -> Self {
+    pub(crate) fn new(name: &'static str, channel: UnboundedSender<C::Message>) -> Self {
         Scope {
+            name,
             muted: Default::default(),
             channel,
         }
@@ -24,6 +29,7 @@ impl<C: Component> Scope<C> {
 impl<C: Component> Clone for Scope<C> {
     fn clone(&self) -> Self {
         Scope {
+            name: self.name,
             muted: self.muted.clone(),
             channel: self.channel.clone(),
         }
@@ -33,9 +39,11 @@ impl<C: Component> Clone for Scope<C> {
 impl<C: 'static + Component> Scope<C> {
     pub(crate) fn inherit<Child: Component>(
         &self,
+        name: &'static str,
         channel: UnboundedSender<Child::Message>,
     ) -> Scope<Child> {
         Scope {
+            name,
             muted: self.muted.clone(),
             channel,
         }
@@ -58,7 +66,12 @@ impl<C: 'static + Component> Scope<C> {
     }
 
     pub fn send_message(&self, msg: C::Message) {
-        println!("Scope::send_message {:?} {:?}", self.is_muted(), msg);
+        debug!(
+            "Scope::send_message{} {}: {:?}",
+            if self.is_muted() { " [muted]" } else { "" },
+            self.name,
+            msg
+        );
         if !self.is_muted() {
             self.channel
                 .unbounded_send(msg)

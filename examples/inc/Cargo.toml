@@ -1,0 +1,12 @@
+[package]
+name = "inc"
+version = "0.1.0"
+authors = ["Bodil Stokke <bodil@bodil.org>"]
+edition = "2018"
+license = "GPL-3.0+"
+
+[dependencies]
+gio = "0.7.0"
+glib = "0.8.0"
+gtk = "0.7.0"
+vgtk = { path = "../../vgtk" }

@@ -97,9 +97,10 @@ where
             sys_recv,
         )));
 
+        let type_name = std::any::type_name::<C>();
         let scope = match parent_scope {
-            Some(ref p) => p.inherit(user_send),
-            None => Scope::new(user_send),
+            Some(ref p) => p.inherit(type_name, user_send),
+            None => Scope::new(type_name, user_send),
         };
         let state = C::create(props);
         let initial_view = state.view();

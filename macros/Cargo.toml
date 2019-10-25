@@ -10,7 +10,7 @@ build = "build.rs"
 proc-macro = true
 
 [dependencies]
-ansi_term = "0.12.1"
+# ansi_term = "0.12.1"
 proc-macro2 = { version = "1.0.5", features = ["nightly"] }
 proc-macro-hack = "0.5.2"
 quote = "1.0.2"

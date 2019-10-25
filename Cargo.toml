@@ -2,4 +2,6 @@
 members = [
     "macros",
     "vgtk",
+    "examples/inc",
+    "examples/todomvc",
 ]

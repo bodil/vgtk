@@ -313,5 +313,6 @@ impl AboutDialog {
 }
 
 fn main() {
+    pretty_env_logger::init();
     std::process::exit(go::<Model>("camp.lol.updog", ApplicationFlags::empty()));
 }

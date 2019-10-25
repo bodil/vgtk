@@ -122,7 +122,6 @@ impl<Model: 'static + Component> ComponentState<Model> {
         if self.model_type == spec.model_type {
             // Components have same type; update props
             for prop in &spec.child_props {
-                println!("[patch] setting child prop for component: {:?}", prop.name);
                 (prop.set)(self.object.upcast_ref(), parent, false);
             }
             self.state.update(&spec.props);
@@ -150,7 +149,6 @@ impl<Model: 'static + Component> SubcomponentState<Model> {
         let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
         let widget = task.widget();
         for prop in child_props {
-            println!("[build] setting child prop for component: {:?}", prop.name);
             (prop.set)(widget.upcast_ref(), parent, true);
         }
 
