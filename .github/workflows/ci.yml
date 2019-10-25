@@ -7,34 +7,53 @@ on:
 
 jobs:
   test:
-    # runs-on: ${{ matrix.os }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        # os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest] # , macOS-latest
         rust: [stable, beta, nightly]
 
     steps:
-      - name: Update packages
-        run: sudo apt-get update
-      - name: Install Gtk build environment
-        run: sudo apt-get install -y libgtk-3-dev
+      # lunix deps
+      - name: (Lunix) Install Gtk build environment
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
+
+      # windows deps
+      - name: (Windows) Install Gtk build environment
+        if: matrix.os == 'windows-latest'
+        run: |
+          vcpkg install gtk:x64-windows
+          copy C:\vcpkg\installed\x64-windows\lib\gtk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gtk-3.lib
+          copy C:\vcpkg\installed\x64-windows\lib\gdk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gdk-3.lib
+
+      # cargo away
       - uses: hecrj/setup-rust-action@v1
         with:
           rust-version: ${{ matrix.rust }}
       - uses: actions/checkout@v1
       - name: Run tests in macros
         run: cd macros; cargo test --all-features
-      - name: Run tests in lib
+      - name: (Lunix) Run tests in lib
+        if: matrix.os == 'ubuntu-latest'
+        run: cd vgtk; cargo test --all-features
+      - name: (Windows) Run tests in lib
+        if: matrix.os == 'windows-latest'
+        env:
+          GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
+          LIB: C:\vcpkg\installed\x64-windows\lib
         run: cd vgtk; cargo test --all-features
 
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - name: Update packages
-        run: sudo apt-get update
       - name: Install Gtk build environment
-        run: sudo apt-get install -y libgtk-3-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
       - uses: hecrj/setup-rust-action@v1
         with:
           rust-version: stable
