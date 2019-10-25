@@ -104,7 +104,9 @@ pub fn open<C: 'static + Component>(
     result
 }
 
-pub fn run_dialog<C: 'static + Component>(parent: Option<&GdkWindow>) -> ResponseType {
+pub fn run_dialog<C: 'static + Component>(
+    parent: Option<&GdkWindow>,
+) -> impl Future<Output = Result<ResponseType, Canceled>> {
     let (_scope, channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
     let dialog: Dialog = task
         .widget()
@@ -113,16 +115,19 @@ pub fn run_dialog<C: 'static + Component>(parent: Option<&GdkWindow>) -> Respons
     if let Some(parent) = parent {
         dialog.set_parent_window(parent);
     }
-    let task = Mutex::new(Cell::new(Some(task)));
-    dialog.connect_map(move |_| {
-        if let Some(task) = task.lock().unwrap().take() {
-            MainContext::ref_thread_default().spawn_local(task);
+    MainContext::ref_thread_default().spawn_local(task);
+    let (notify, result) = oneshot::channel();
+    let notify = Mutex::new(Cell::new(Some(notify)));
+    dialog.connect_map(move |_| channel.unbounded_send(ComponentMessage::Mounted).unwrap());
+    let inner_dialog = dialog.clone();
+    dialog.connect_response(move |_, response| {
+        if let Some(notify) = notify.lock().unwrap().take() {
+            if notify.send(response).is_err() {}
         }
-        channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+        inner_dialog.destroy();
     });
-    let response = dialog.run();
-    dialog.destroy();
-    response
+    dialog.present();
+    result
 }
 
 /// Run the Gtk main loop until termination.

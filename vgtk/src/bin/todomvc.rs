@@ -174,7 +174,9 @@ impl Component for Model {
             Msg::Exit => {
                 vgtk::main_quit(0);
             }
-            Msg::MenuAbout => AboutDialog::run(),
+            Msg::MenuAbout => {
+                AboutDialog::run();
+            }
         }
         true
     }
@@ -186,7 +188,12 @@ impl Component for Model {
                     <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
                                 image="open-menu-symbolic">
                         <Menu>
-                            <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
+                            <MenuItem label="_Open..." use_underline=true/>
+                            <SeparatorMenuItem/>
+                            <MenuItem label="_Save" use_underline=true/>
+                            <MenuItem label="Sa_ve as..." use_underline=true/>
+                            <SeparatorMenuItem/>
+                            <MenuItem label="_About..." use_underline=true on activate=|_| {Msg::MenuAbout}/>
                         </Menu>
                     </MenuButton>
                 </HeaderBar>
@@ -295,14 +302,12 @@ impl Component for AboutDialog {
 }
 
 impl AboutDialog {
+    #[allow(unused_must_use)]
     fn run() {
-        println!(
-            "Response type: {:?}",
-            run_dialog::<Self>(
-                vgtk::current_widget()
-                    .and_then(|w| w.get_parent_window())
-                    .as_ref(),
-            )
+        run_dialog::<Self>(
+            vgtk::current_widget()
+                .and_then(|w| w.get_parent_window())
+                .as_ref(),
         );
     }
 }
