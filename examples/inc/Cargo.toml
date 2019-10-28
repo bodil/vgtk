@@ -10,3 +10,4 @@ gio = "0.7.0"
 glib = "0.8.0"
 gtk = "0.7.0"
 vgtk = { path = "../../vgtk" }
+pretty_env_logger = "0.3.1"

@@ -1,0 +1,14 @@
+[
+  {
+    "task": "Short the GBP",
+    "done": true
+  },
+  {
+    "task": "Get Brexit done",
+    "done": false
+  },
+  {
+    "task": "PROFIT!",
+    "done": false
+  }
+]

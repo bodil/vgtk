@@ -86,7 +86,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     let name = &gtk.name;
     let (prop_count, child_prop_count, handler_count) = count_attributes(&gtk.attributes);
     let mut out = quote!(
-        use vgtk::{VNode, VHandler, VProperty, VWidget, VComponent};
+        use vgtk::{VNode, VHandler, VProperty, VObject, VComponent};
         use vgtk::Scope;
         use glib::StaticType;
         use std::vec::Vec;
@@ -146,7 +146,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     }
     quote!({
         #out
-        VNode::Widget(VWidget {
+        VNode::Object(VObject {
             object_type,
             constructor,
             properties,
@@ -186,10 +186,7 @@ pub fn expand_property(
                   .unwrap_or_else(|| panic!("downcast to {:?} failed in property setter", #object_type::static_type()));
         )
     } else {
-        quote!(
-            let object: &Widget = object.downcast_ref()
-                  .expect("downcast to Widget failed in property setter");
-        )
+        quote!()
     };
     let setter_body = if !child_prop {
         if parent_type.is_empty() {
@@ -224,7 +221,7 @@ pub fn expand_property(
             let value = #value.into_property_value();
             VProperty {
                 name: #prop_name,
-                set: std::boxed::Box::new(move |object: &glib::Object, parent: Option<&Container>, force: bool| {
+                set: std::boxed::Box::new(move |object: &glib::Object, parent: Option<&glib::Object>, force: bool| {
                     #setter_prelude
                     #setter_body
                 }),

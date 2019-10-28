@@ -1,6 +1,6 @@
 use glib::futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
-use gtk::{self, Container, Widget};
+use glib::Object;
 
 use std::any::TypeId;
 use std::marker::PhantomData;
@@ -18,7 +18,7 @@ trait PropertiesReceiver {
 
 pub struct ComponentState<Model: Component> {
     parent: PhantomData<Model>,
-    pub(crate) object: Widget,
+    pub(crate) object: Object,
     model_type: TypeId,
     state: Box<dyn PropertiesReceiver>,
 }
@@ -26,7 +26,7 @@ pub struct ComponentState<Model: Component> {
 impl<Model: 'static + Component> ComponentState<Model> {
     pub fn build<Child: 'static + Component>(
         props: &AnyProps,
-        parent: Option<&Container>,
+        parent: Option<&Object>,
         child_props: &[VProperty],
         scope: &Scope<Model>,
     ) -> Self {
@@ -43,7 +43,7 @@ impl<Model: 'static + Component> ComponentState<Model> {
     pub fn patch(
         &mut self,
         spec: &VComponent<Model>,
-        parent: Option<&Container>,
+        parent: Option<&Object>,
         _scope: &Scope<Model>,
     ) -> bool {
         if self.model_type == spec.model_type {
@@ -68,19 +68,19 @@ pub struct SubcomponentState<Model: Component> {
 impl<Model: 'static + Component> SubcomponentState<Model> {
     fn new<P: 'static + Component>(
         props: &AnyProps,
-        parent: Option<&Container>,
+        parent: Option<&Object>,
         child_props: &[VProperty],
         parent_scope: &Scope<P>,
-    ) -> (Self, Widget) {
+    ) -> (Self, Object) {
         let props: Model::Properties = props.unwrap();
         let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
-        let widget = task.widget();
+        let object = task.object();
         for prop in child_props {
-            (prop.set)(widget.upcast_ref(), parent, true);
+            (prop.set)(object.upcast_ref(), parent, true);
         }
 
         crate::MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
-        (SubcomponentState { channel }, widget)
+        (SubcomponentState { channel }, object)
     }
 }
 

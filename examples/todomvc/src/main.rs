@@ -5,12 +5,11 @@ mod app;
 mod items;
 mod radio;
 
-use gio::ApplicationFlags;
-use vgtk::go;
+use vgtk::run;
 
 use app::Model;
 
 fn main() {
     pretty_env_logger::init();
-    std::process::exit(go::<Model>("camp.lol.todomvc", ApplicationFlags::empty()));
+    std::process::exit(run::<Model>());
 }

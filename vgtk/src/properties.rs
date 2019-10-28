@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use glib::{object::Cast, GString};
+use glib::{Cast, GString};
 use gtk::{IconSize, Image, ImageExt, Widget};
 
 pub struct PropertyValue<'a, A, Get, Set>

@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use gio::ApplicationFlags;
 use gtk::prelude::*;
 use gtk::*;
 use vgtk::{ext::*, gtk, Component, VNode};
@@ -156,59 +157,61 @@ impl Component for Model {
         let clean = if self.clean { "" } else { " *" };
 
         gtk! {
-            <Window default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
-                <HeaderBar title={format!("TodoMVC - {}{}", title, clean)} subtitle="wtf do we do now" show_close_button=true>
-                    <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
-                                image="open-menu-symbolic">
-                        <Menu>
-                            <MenuItem label="Open..." @GtkMenuItemExt::accel_path="open" on activate=|_| {Msg::MenuOpen}/>
-                            <SeparatorMenuItem/>
-                            <MenuItem label="Save" @GtkMenuItemExt::accel_path="save" sensitive={self.items.has_path() && !self.clean}
-                                      on activate=|_| {Msg::MenuSave}/>
-                            <MenuItem label="Save as..." @GtkMenuItemExt::accel_path="save_as" on activate=|_| {Msg::MenuSaveAs}/>
-                            <SeparatorMenuItem/>
-                            <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
-                        </Menu>
-                    </MenuButton>
-                </HeaderBar>
-                <Box spacing=10 orientation={Orientation::Vertical}>
-                    <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
-                        <Button image="edit-select-all" relief={ReliefStyle::Half}
-                                always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
-                        <Entry placeholder_text="What needs to be done?"
-                               Box::expand=true Box::fill=true
-                               on activate=|entry| {
-                                   let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
-                                   entry.select_region(0, label.len() as i32);
-                                   Msg::Add {
-                                       item: label
-                                   }
-                               } />
-                    </Box>
-                    <ScrolledWindow Box::expand=true Box::fill=true>
-                        <ListBox selection_mode={SelectionMode::None}>
+            <Application::new_unwrap(Some("camp.lol.todomvc"), ApplicationFlags::empty())>
+                <Window default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
+                    <HeaderBar title={format!("TodoMVC - {}{}", title, clean)} subtitle="wtf do we do now" show_close_button=true>
+                        <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
+                                    image="open-menu-symbolic">
+                            <Menu>
+                                <MenuItem label="Open..." @GtkMenuItemExt::accel_path="open" on activate=|_| {Msg::MenuOpen}/>
+                                <SeparatorMenuItem/>
+                                <MenuItem label="Save" @GtkMenuItemExt::accel_path="save" sensitive={self.items.has_path() && !self.clean}
+                                          on activate=|_| {Msg::MenuSave}/>
+                                <MenuItem label="Save as..." @GtkMenuItemExt::accel_path="save_as" on activate=|_| {Msg::MenuSaveAs}/>
+                                <SeparatorMenuItem/>
+                                <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
+                            </Menu>
+                        </MenuButton>
+                    </HeaderBar>
+                    <Box spacing=10 orientation={Orientation::Vertical}>
+                        <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
+                            <Button image="edit-select-all" relief={ReliefStyle::Half}
+                                    always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
+                            <Entry placeholder_text="What needs to be done?"
+                                   Box::expand=true Box::fill=true
+                                   on activate=|entry| {
+                                       let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
+                                       entry.select_region(0, label.len() as i32);
+                                       Msg::Add {
+                                           item: label
+                                       }
+                                   } />
+                        </Box>
+                        <ScrolledWindow Box::expand=true Box::fill=true>
+                            <ListBox selection_mode={SelectionMode::None}>
+                                {
+                                    self.filter(self.filter).enumerate()
+                                        .map(|(index, item)| item.render(index))
+                                }
+                            </ListBox>
+                        </ScrolledWindow>
+                        <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
+                            <Label label={self.left_label()}/>
+                            <@Radio<Filter> active={self.filter} Box::center_widget=true on_changed={|filter| Msg::Filter { filter }} />
                             {
-                                self.filter(self.filter).enumerate()
-                                    .map(|(index, item)| item.render(index))
+                                if self.filter(Filter::Completed).count() > 0 {
+                                    (gtk!{
+                                         <Button label="Clear completed" Box::pack_type={PackType::End}
+                                                 on clicked=|_| {Msg::ClearCompleted}/>
+                                    }).into_iter()
+                                } else {
+                                    VNode::empty()
+                                }
                             }
-                        </ListBox>
-                    </ScrolledWindow>
-                    <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
-                        <Label label={self.left_label()}/>
-                        <@Radio<Filter> active={self.filter} Box::center_widget=true on_changed={|filter| Msg::Filter { filter }} />
-                        {
-                            if self.filter(Filter::Completed).count() > 0 {
-                                (gtk!{
-                                     <Button label="Clear completed" Box::pack_type={PackType::End}
-                                             on clicked=|_| {Msg::ClearCompleted}/>
-                                }).into_iter()
-                            } else {
-                                VNode::empty()
-                            }
-                        }
+                        </Box>
                     </Box>
-                </Box>
-            </Window>
+                </Window>
+            </Application>
         }
     }
 }
@@ -216,7 +219,7 @@ impl Component for Model {
 fn open(model: &mut Model) -> bool {
     let dialog = FileChooserNative::new(
         Some("Open a todo list"),
-        vgtk::current_widget()
+        vgtk::current_object()
             .and_then(|w| w.downcast::<Window>().ok())
             .as_ref(),
         FileChooserAction::Open,
@@ -247,7 +250,7 @@ fn open(model: &mut Model) -> bool {
 fn save_as(model: &mut Model) -> bool {
     let dialog = FileChooserNative::new(
         Some("Save your todo list"),
-        vgtk::current_widget()
+        vgtk::current_object()
             .and_then(|w| w.downcast::<Window>().ok())
             .as_ref(),
         FileChooserAction::Save,

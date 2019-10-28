@@ -1,24 +1,23 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
-    self, prelude::*, Bin, Box as GtkBox, Builder, Container, Dialog, Menu, MenuButton, MenuItem,
-    Widget, Window,
+    self, prelude::*, Application, Bin, Box as GtkBox, Builder, Container, Dialog, Menu,
+    MenuButton, MenuItem, Widget, Window,
 };
 
 use super::State;
 use crate::component::Component;
 use crate::scope::Scope;
-use crate::vnode::{VHandler, VNode, VProperty, VWidget};
+use crate::vnode::{VHandler, VNode, VObject, VProperty};
 
 pub struct GtkState<Model: Component> {
-    pub object: Widget,
+    pub object: Object,
     handlers: HashMap<(&'static str, &'static str), SignalHandlerId>,
     children: Vec<State<Model>>,
 }
 
-fn build_obj<A: IsA<Object>, Model: Component>(spec: &VWidget<Model>) -> A {
+fn build_obj<A: IsA<Object>, Model: Component>(spec: &VObject<Model>) -> A {
     let class = spec.object_type;
     let obj = if let Some(ref cons) = spec.constructor {
         cons()
@@ -40,13 +39,22 @@ fn build_obj<A: IsA<Object>, Model: Component>(spec: &VWidget<Model>) -> A {
 
 // Gtk has many strange ways of adding children to a parent.
 fn add_child<Model: Component>(
-    parent: &Container,
+    parent: &Object,
     index: usize,
     total: usize,
     child_spec: &VNode<Model>,
-    child: &Widget,
+    child: &Object,
 ) {
-    if let Some(button) = parent.downcast_ref::<MenuButton>() {
+    if let Some(application) = parent.downcast_ref::<Application>() {
+        if let Some(window) = child.downcast_ref::<Window>() {
+            application.add_window(window);
+        } else {
+            panic!(
+                "Application's children must be Windows, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(button) = parent.downcast_ref::<MenuButton>() {
         // MenuButton: can only have a single child, either a `Menu` set with
         // `set_popup` or any other `Widget` set with `set_popover`.
         if total > 1 {
@@ -57,8 +65,13 @@ fn add_child<Model: Component>(
         }
         if let Some(menu) = child.downcast_ref::<Menu>() {
             button.set_popup(Some(menu));
+        } else if let Some(widget) = child.downcast_ref::<Widget>() {
+            button.set_popover(Some(widget));
         } else {
-            button.set_popover(Some(child));
+            panic!(
+                "MenuButton's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
         }
     } else if let Some(item) = parent.downcast_ref::<MenuItem>() {
         // MenuItem: single child, must be a `Menu`, set with `set_submenu`.
@@ -76,7 +89,14 @@ fn add_child<Model: Component>(
     } else if let Some(dialog) = parent.downcast_ref::<Dialog>() {
         // Dialog: children must be added to the Dialog's content area through
         // get_content_area().
-        dialog.get_content_area().add(child);
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            dialog.get_content_area().add(widget);
+        } else {
+            panic!(
+                "Dialog's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
+        }
     } else if let Some(window) = parent.downcast_ref::<Window>() {
         // Window: if 1 child, it's the window's main widget. If 2 children, the
         // first is the title bar and the second is the main widget. More than 2
@@ -87,29 +107,59 @@ fn add_child<Model: Component>(
                 total
             );
         }
-        if total == 2 && index == 0 {
-            window.set_titlebar(Some(child));
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            if total == 2 && index == 0 {
+                window.set_titlebar(Some(widget));
+            } else {
+                window.add(widget);
+            }
         } else {
-            window.add(child);
+            panic!(
+                "Window's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
         }
     } else if let Some(parent) = parent.downcast_ref::<Bin>() {
         // Bin: can only have a single child.
         if total > 1 {
             panic!("Bins can only have 1 child, but {} were found.", total);
         }
-        parent.add(child);
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            parent.add(widget);
+        } else {
+            panic!(
+                "Bin's child must be a Widget, but {} was found.",
+                child.get_type()
+            );
+        }
     } else if let Some(parent) = parent.downcast_ref::<GtkBox>() {
         // Box: added normally, except one widget can be added using
         // set_center_widget() if it has the center_widget=true child property
         // (which is faked in ext.rs). More than one child with this property is
         // undefined behaviour.
-        if child_spec.get_child_prop("center_widget").is_some() {
-            parent.set_center_widget(Some(child));
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            if child_spec.get_child_prop("center_widget").is_some() {
+                parent.set_center_widget(Some(widget));
+            } else {
+                parent.add(widget);
+            }
         } else {
-            parent.add(child);
+            panic!(
+                "Box's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(container) = parent.downcast_ref::<Container>() {
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            container.add(widget);
+        } else {
+            panic!(
+                "Container's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
         }
     } else {
-        parent.add(child);
+        panic!("Don't know how to add children to a {}", parent.get_type());
     }
     // Apply child properties
     for prop in child_spec.get_child_props() {
@@ -117,10 +167,46 @@ fn add_child<Model: Component>(
     }
 }
 
+fn remove_child(parent: &Object, child: &Object) {
+    // There are also special cases for removing children.
+    if let Some(application) = parent.downcast_ref::<Application>() {
+        if let Some(window) = child.downcast_ref::<Window>() {
+            application.remove_window(window);
+        } else {
+            panic!(
+                "Applications can only contain Windows, but was asked to remove a {}.",
+                child.get_type()
+            );
+        }
+    } else if let Some(container) = parent.downcast_ref::<Container>() {
+        // For a Container and a Widget child, we should always be able to call
+        // `Container::remove`.
+        if let Some(child_widget) = child.downcast_ref::<Widget>() {
+            container.remove(child_widget);
+        } else {
+            panic!(
+                "Containers can only contain Widgets but was asked to remove a {}.",
+                child.get_type()
+            );
+        }
+    } else {
+        panic!(
+            "Don't know how to remove a child from a {}",
+            parent.get_type()
+        );
+    }
+}
+
 impl<Model: 'static + Component> GtkState<Model> {
-    pub fn build(vobj: &VWidget<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+    // This function build the root object, but not its children. You must call
+    // `build_children()` to finalise construction.
+    pub(crate) fn build_root(
+        vobj: &VObject<Model>,
+        parent: Option<&Object>,
+        scope: &Scope<Model>,
+    ) -> Self {
         // Build this object
-        let object = build_obj::<Widget, _>(vobj);
+        let object: Object = build_obj(&vobj);
 
         // Apply properties
         for prop in &vobj.properties {
@@ -134,136 +220,146 @@ impl<Model: 'static + Component> GtkState<Model> {
             handlers.insert((handler.name, handler.id), handle);
         }
 
-        let mut state = GtkState {
-            object: object.clone(),
+        GtkState {
+            object: object.clone().upcast(),
             handlers,
             children: Vec::new(),
-        };
+        }
+    }
 
+    pub(crate) fn build_children(&mut self, vobj: &VObject<Model>, scope: &Scope<Model>) {
+        let object = &self.object;
         // Build children
-        if let Some(parent) = object.downcast_ref::<Container>() {
-            let total_children = vobj.children.len();
-            for (index, child_spec) in vobj.children.iter().enumerate() {
-                let child = State::build(child_spec, Some(parent), scope);
-                let widget = child.object().clone();
-                add_child(parent, index, total_children, child_spec, &widget);
-                state.children.push(child);
-            }
-        } else if !vobj.children.is_empty() {
-            panic!(
-                "vnode has children but object type is {:?} which isn't a Container",
-                vobj.object_type
-            );
+        let total_children = vobj.children.len();
+        for (index, child_spec) in vobj.children.iter().enumerate() {
+            let child = State::build(child_spec, Some(&object), &scope);
+            let child_object = child.object().clone();
+            add_child(&object, index, total_children, child_spec, &child_object);
+            self.children.push(child);
         }
 
-        // Show this object
-        state.object.show();
+        // Show this object, if it's a widget
+        if let Some(widget) = self.object.downcast_ref::<Widget>() {
+            widget.show();
+        }
+    }
 
+    pub fn build(vobj: &VObject<Model>, parent: Option<&Object>, scope: &Scope<Model>) -> Self {
+        let mut state = Self::build_root(vobj, parent, scope);
+        state.build_children(vobj, scope);
         state
     }
 
     pub fn patch(
         &mut self,
-        vobj: &VWidget<Model>,
-        parent: Option<&Container>,
+        vobj: &VObject<Model>,
+        parent: Option<&Object>,
         scope: &Scope<Model>,
     ) -> bool {
         // Patch children
-        if let Some(parent) = self.object.downcast_ref::<Container>() {
-            let mut to_remove = None;
-            let mut to_append = Vec::new();
-            let mut reconstruct_from = None;
-            for index in 0..(self.children.len().max(vobj.children.len())) {
-                match (self.children.get_mut(index), vobj.children.get(index)) {
-                    (Some(State::Component(target)), Some(spec_item)) => {
-                        match spec_item {
-                            VNode::Widget(_) => {
-                                // Component has become a widget; reconstruct from here
-                                reconstruct_from = Some(index);
-                                break;
-                            }
-                            VNode::Component(ref spec) => {
-                                if !target.patch(spec, Some(parent), scope) {
-                                    reconstruct_from = Some(index);
-                                    break;
-                                }
-                            }
+        let mut to_remove = None;
+        let mut to_append = Vec::new();
+        let mut reconstruct_from = None;
+        for index in 0..(self.children.len().max(vobj.children.len())) {
+            match (self.children.get_mut(index), vobj.children.get(index)) {
+                (Some(State::Component(target)), Some(spec_item)) => {
+                    match spec_item {
+                        VNode::Object(_) => {
+                            // Component has become a widget; reconstruct from here
+                            reconstruct_from = Some(index);
+                            break;
                         }
-                    }
-                    (Some(State::Gtk(target)), Some(spec_item)) => {
-                        match spec_item {
-                            VNode::Widget(ref spec) => {
-                                if target.object.get_type() == spec.object_type {
-                                    // Objects have same type; patch down
-                                    target.patch(spec, Some(&parent), scope);
-                                } else {
-                                    // Objects are different, need to reconstruct everything from here
-                                    reconstruct_from = Some(index);
-                                    break;
-                                }
-                            }
-                            VNode::Component(_) => {
-                                // Gtk object has turned into a component; reconstruct from here
+                        VNode::Component(ref spec) => {
+                            if !target.patch(spec, Some(&self.object), scope) {
                                 reconstruct_from = Some(index);
                                 break;
                             }
                         }
                     }
-                    (Some(_), None) => {
-                        // Extraneous Gtk object; delete
-                        if to_remove.is_none() {
-                            to_remove = Some(index);
+                }
+                (Some(State::Gtk(target)), Some(spec_item)) => {
+                    match spec_item {
+                        VNode::Object(ref spec) => {
+                            if target.object.get_type() == spec.object_type {
+                                // Objects have same type; patch down
+                                target.patch(spec, Some(&self.object), scope);
+                            } else {
+                                // Objects are different, need to reconstruct everything from here
+                                reconstruct_from = Some(index);
+                                break;
+                            }
                         }
-                        break;
+                        VNode::Component(_) => {
+                            // Gtk object has turned into a component; reconstruct from here
+                            reconstruct_from = Some(index);
+                            break;
+                        }
                     }
-                    (None, Some(spec)) => {
-                        // New spec; construct
-                        let state = State::build(spec, Some(&parent), scope);
-                        add_child(parent, index, vobj.children.len(), spec, state.object());
-                        to_append.push(state);
+                }
+                (Some(_), None) => {
+                    // Extraneous Gtk object; delete
+                    if to_remove.is_none() {
+                        to_remove = Some(index);
                     }
-                    (None, None) => break,
+                    break;
                 }
-            }
-            if let Some(index) = reconstruct_from {
-                // Remove all previous children from here onwards
-                if self.object.is::<Window>() && index == 0 && self.children.len() == 2 {
-                    panic!("Can't remove a title bar widget from an existing Window!");
-                }
-                for child in self.children.drain(index..) {
-                    parent.remove(child.object());
-                }
-                // Rebuild children from new specs
-                for (index, child_spec) in vobj.children.iter().enumerate().skip(index) {
-                    let state = State::build(child_spec, Some(&parent), scope);
+                (None, Some(spec)) => {
+                    // New spec; construct
+                    let state = State::build(spec, Some(&self.object), scope);
                     add_child(
-                        parent,
+                        &self.object,
                         index,
                         vobj.children.len(),
-                        child_spec,
+                        spec,
                         state.object(),
                     );
-                    state.object().show();
-                    self.children.push(state);
+                    to_append.push(state);
                 }
-            } else {
-                // Remove children flagged as extraneous
-                if let Some(remove_from) = to_remove {
-                    if self.object.is::<Window>() && remove_from == 1 && self.children.len() == 2 {
-                        panic!("Can't remove a title bar widget from an existing Window!");
-                    }
-                    for child in self.children.drain(remove_from..) {
-                        parent.remove(child.object());
-                    }
+                (None, None) => break,
+            }
+        }
+        if let Some(index) = reconstruct_from {
+            // Remove all previous children from here onwards
+            if self.object.is::<Window>() && index == 0 && self.children.len() == 2 {
+                panic!("Can't remove a title bar widget from an existing Window!");
+            }
+            for child in self.children.drain(index..) {
+                remove_child(&self.object, child.object());
+            }
+            // Rebuild children from new specs
+            for (index, child_spec) in vobj.children.iter().enumerate().skip(index) {
+                let state = State::build(child_spec, Some(&self.object), scope);
+                add_child(
+                    &self.object,
+                    index,
+                    vobj.children.len(),
+                    child_spec,
+                    state.object(),
+                );
+                if let Some(w) = state.widget() {
+                    w.show()
                 }
-                // Or append newly constructed children
-                if self.object.is::<Window>() && !to_append.is_empty() && self.children.len() == 1 {
-                    panic!("Can't add a title bar widget to an existing Window!");
+                self.children.push(state);
+            }
+        } else {
+            // Remove children flagged as extraneous
+            if let Some(remove_from) = to_remove {
+                if self.object.is::<Window>() && remove_from == 1 && self.children.len() == 2 {
+                    panic!("Can't remove a title bar widget from an existing Window!");
                 }
-                for child in to_append {
-                    child.object().show();
-                    self.children.push(child);
+                for child in self.children.drain(remove_from..) {
+                    remove_child(&self.object, &child.object());
                 }
+            }
+            // Or append newly constructed children
+            if self.object.is::<Window>() && !to_append.is_empty() && self.children.len() == 1 {
+                panic!("Can't add a title bar widget to an existing Window!");
+            }
+            for child in to_append {
+                if let Some(w) = child.widget() {
+                    w.show()
+                }
+                self.children.push(child);
             }
         }
 
@@ -279,7 +375,7 @@ impl<Model: 'static + Component> GtkState<Model> {
         true
     }
 
-    fn patch_properties(&mut self, properties: &[VProperty], parent: Option<&Container>) {
+    fn patch_properties(&mut self, properties: &[VProperty], parent: Option<&Object>) {
         for prop in properties {
             (prop.set)(self.object.upcast_ref(), parent, false);
         }

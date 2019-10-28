@@ -1,4 +1,4 @@
-use gtk::Container;
+use glib::Object;
 
 use std::any::{Any, TypeId};
 use std::marker::PhantomData;
@@ -50,7 +50,7 @@ impl AnyProps {
 }
 
 type Constructor<Model> =
-    dyn Fn(&AnyProps, Option<&Container>, &[VProperty], &Scope<Model>) -> ComponentState<Model>;
+    dyn Fn(&AnyProps, Option<&Object>, &[VProperty], &Scope<Model>) -> ComponentState<Model>;
 
 pub struct VComponent<Model: Component> {
     parent: PhantomData<Model>,

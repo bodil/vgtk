@@ -1,24 +1,24 @@
 use crate::Component;
 
 pub(crate) mod component;
+mod gobject;
 mod handler;
 mod property;
-mod widget;
 
 pub use component::{PropTransform, VComponent};
+pub use gobject::VObject;
 pub use handler::VHandler;
 pub use property::VProperty;
-pub use widget::VWidget;
 
 pub enum VNode<Model: Component> {
-    Widget(VWidget<Model>),
+    Object(VObject<Model>),
     Component(VComponent<Model>),
 }
 
 impl<Model: Component> VNode<Model> {
     pub fn get_child_props(&self) -> &[VProperty] {
         match self {
-            VNode::Widget(widget) => &widget.child_props,
+            VNode::Object(object) => &object.child_props,
             VNode::Component(comp) => &comp.child_props,
         }
     }

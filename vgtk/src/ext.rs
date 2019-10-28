@@ -1,9 +1,20 @@
 use gdk_pixbuf::Pixbuf;
-use glib::{GString, IsA};
+use gio::ApplicationFlags;
+use glib::{GString, Object};
 use gtk::{
-    Box, BoxExt, GtkWindowExt, Image, ImageExt, Label, LabelExt, Widget, Window, WindowPosition,
-    WindowType,
+    Application, Box, BoxExt, GtkWindowExt, Image, ImageExt, Label, LabelExt, Window,
+    WindowPosition, WindowType,
 };
+
+pub trait ApplicationHelpers {
+    fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application;
+}
+
+impl ApplicationHelpers for Application {
+    fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
+        Application::new(application_id, flags).expect("unable to create Application object")
+    }
+}
 
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32;
@@ -61,17 +72,17 @@ impl WindowExtHelpers for Window {
 }
 
 pub trait BoxExtHelpers: BoxExt {
-    fn get_child_center_widget<P: IsA<Widget>>(&self, child: &P) -> bool;
-    fn set_child_center_widget<P: IsA<Widget>>(&self, child: &P, center: bool);
+    fn get_child_center_widget(&self, child: &Object) -> bool;
+    fn set_child_center_widget(&self, child: &Object, center: bool);
 }
 
 impl BoxExtHelpers for Box {
-    fn get_child_center_widget<P: IsA<Widget>>(&self, _child: &P) -> bool {
+    fn get_child_center_widget(&self, _child: &Object) -> bool {
         // Always compare true, it's all taken care of in add_child().
         true
     }
 
-    fn set_child_center_widget<P: IsA<Widget>>(&self, _child: &P, _center: bool) {
+    fn set_child_center_widget(&self, _child: &Object, _center: bool) {
         // This is handled by add_child() rules. The setter is a no-op.
     }
 }

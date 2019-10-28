@@ -4,8 +4,8 @@ use glib::futures::{
     task::Context,
     Future, Poll, StreamExt,
 };
+use glib::Object;
 use glib::{ObjectExt, WeakRef};
-use gtk::{Container, Widget};
 
 use std::any::TypeId;
 use std::fmt::Debug;
@@ -74,6 +74,7 @@ where
     state: C,
     ui_state: State<C>,
     channel: Pin<Box<dyn Stream<Item = ComponentMessage<C>>>>,
+    finalised: bool,
 }
 
 impl<C, P> ComponentTask<C, P>
@@ -81,11 +82,16 @@ where
     C: 'static + Component,
     P: 'static + Component,
 {
-    pub(crate) fn new(
+    pub(crate) fn new_defer(
         props: C::Properties,
-        parent: Option<&Container>,
+        parent: Option<&Object>,
         parent_scope: Option<&Scope<P>>,
-    ) -> (Scope<C>, UnboundedSender<ComponentMessage<C>>, Self) {
+    ) -> (
+        Scope<C>,
+        UnboundedSender<ComponentMessage<C>>,
+        VNode<C>,
+        Self,
+    ) {
         let (sys_send, sys_recv) = unbounded();
         let (user_send, user_recv) = unbounded();
 
@@ -104,21 +110,41 @@ where
         };
         let state = C::create(props);
         let initial_view = state.view();
-        let ui_state = State::build(&initial_view, parent, &scope);
+        let ui_state = State::build_root(&initial_view, parent, &scope);
         (
             scope.clone(),
             sys_send,
+            initial_view,
             ComponentTask {
                 scope,
                 parent_scope: parent_scope.cloned(),
                 state,
                 ui_state,
                 channel,
+                finalised: false,
             },
         )
     }
 
+    pub(crate) fn finalise_deferred(&mut self, view: VNode<C>) {
+        self.ui_state.build_children(&view, &self.scope);
+        self.finalised = true;
+    }
+
+    pub(crate) fn new(
+        props: C::Properties,
+        parent: Option<&Object>,
+        parent_scope: Option<&Scope<P>>,
+    ) -> (Scope<C>, UnboundedSender<ComponentMessage<C>>, Self) {
+        let (scope, channel, view, mut task) = Self::new_defer(props, parent, parent_scope);
+        task.finalise_deferred(view);
+        (scope, channel, task)
+    }
+
     pub fn process(&mut self, ctx: &mut Context) -> Poll<()> {
+        if !self.finalised {
+            panic!("component being used before its constructor has been finalised!");
+        }
         let mut render = false;
         loop {
             match Stream::poll_next(self.channel.as_mut(), ctx) {
@@ -159,7 +185,7 @@ where
         }
     }
 
-    pub fn widget(&self) -> Widget {
+    pub fn object(&self) -> Object {
         self.ui_state.object().clone()
     }
 
@@ -180,19 +206,19 @@ where
     }
 }
 
-pub fn current_widget() -> Option<Widget> {
+pub fn current_object() -> Option<Object> {
     LOCAL_CONTEXT.with(|key| {
         let lock = key.read().unwrap();
-        lock.current_widget
+        lock.current_object
             .as_ref()
-            .and_then(|widget| widget.upgrade())
+            .and_then(|object| object.upgrade())
     })
 }
 
 #[derive(Default)]
 struct LocalContext {
     parent_scope: Option<AnyScope>,
-    current_widget: Option<WeakRef<Widget>>,
+    current_object: Option<WeakRef<Object>>,
 }
 
 thread_local! {
@@ -210,7 +236,7 @@ where
         LOCAL_CONTEXT.with(|key| {
             *key.write().unwrap() = LocalContext {
                 parent_scope: self.parent_scope.as_ref().map(|scope| scope.clone().into()),
-                current_widget: Some(self.ui_state.object().downgrade()),
+                current_object: Some(self.ui_state.object().downgrade()),
             };
         });
         let polled = self.get_mut().process(ctx);

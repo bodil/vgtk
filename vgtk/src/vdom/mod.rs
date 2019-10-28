@@ -1,4 +1,5 @@
-use gtk::{self, Container, Widget};
+use glib::{Cast, Object};
+use gtk::{self, Widget};
 
 use crate::component::Component;
 use crate::scope::Scope;
@@ -16,14 +17,40 @@ pub enum State<Model: Component> {
 }
 
 impl<Model: 'static + Component> State<Model> {
-    /// Build a state from a `VItem` spec.
-    pub fn build(vnode: &VNode<Model>, parent: Option<&Container>, scope: &Scope<Model>) -> Self {
+    /// Build a full state from a `VItem` spec.
+    pub fn build(vnode: &VNode<Model>, parent: Option<&Object>, scope: &Scope<Model>) -> Self {
         match vnode {
-            VNode::Widget(widget) => State::Gtk(GtkState::build(widget, parent, scope)),
+            VNode::Object(object) => State::Gtk(GtkState::build(object, parent, scope)),
             VNode::Component(vcomp) => {
                 let comp = (vcomp.constructor)(&vcomp.props, parent, &vcomp.child_props, scope);
                 State::Component(comp)
             }
+        }
+    }
+
+    /// Build a full state from a `VItem` spec.
+    pub(crate) fn build_root(
+        vnode: &VNode<Model>,
+        parent: Option<&Object>,
+        scope: &Scope<Model>,
+    ) -> Self {
+        match vnode {
+            VNode::Object(object) => State::Gtk(GtkState::build_root(object, parent, scope)),
+            VNode::Component(_vcomp) => {
+                // let comp = (vcomp.constructor)(&vcomp.props, parent, &vcomp.child_props, scope);
+                // State::Component(comp)
+                unimplemented!()
+            }
+        }
+    }
+
+    pub(crate) fn build_children(&mut self, vnode: &VNode<Model>, scope: &Scope<Model>) {
+        match vnode {
+            VNode::Object(vobject) => match self {
+                State::Gtk(gtk_state) => gtk_state.build_children(vobject, scope),
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
         }
     }
 
@@ -34,12 +61,12 @@ impl<Model: 'static + Component> State<Model> {
     pub fn patch(
         &mut self,
         vnode: &VNode<Model>,
-        parent: Option<&Container>,
+        parent: Option<&Object>,
         scope: &Scope<Model>,
     ) -> bool {
         match vnode {
-            VNode::Widget(widget) => match self {
-                State::Gtk(state) => state.patch(widget, parent, scope),
+            VNode::Object(object) => match self {
+                State::Gtk(state) => state.patch(object, parent, scope),
                 State::Component(_) => false,
             },
             VNode::Component(vcomp) => match self {
@@ -49,11 +76,19 @@ impl<Model: 'static + Component> State<Model> {
         }
     }
 
-    /// Get the Gtk `Widget` represented by this state.
-    pub fn object(&self) -> &Widget {
+    /// Get the Glib `Object` represented by this state.
+    pub fn object(&self) -> &Object {
         match self {
             State::Gtk(state) => &state.object,
             State::Component(state) => &state.object,
+        }
+    }
+
+    /// Get the Gtk `Widget` represented by this state, if it has a `Widget`.
+    pub fn widget(&self) -> Option<&Widget> {
+        match self {
+            State::Gtk(state) => state.object.downcast_ref::<Widget>(),
+            State::Component(state) => state.object.downcast_ref::<Widget>(),
         }
     }
 }
