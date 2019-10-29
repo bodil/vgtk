@@ -73,7 +73,7 @@ impl<Model: 'static + Component> SubcomponentState<Model> {
         parent_scope: &Scope<P>,
     ) -> (Self, Object) {
         let props: Model::Properties = props.unwrap();
-        let (_scope, channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
+        let (channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
         let object = task.object();
         for prop in child_props {
             (prop.set)(object.upcast_ref(), parent, true);

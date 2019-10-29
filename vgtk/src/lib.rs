@@ -28,7 +28,7 @@ use gtk::{Application, Dialog, ResponseType};
 
 use log::debug;
 
-use crate::component::{ComponentMessage, ComponentTask};
+use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
 use crate::mainloop::{GtkMainLoop, MainLoop};
 
 pub use crate::callback::Callback;
@@ -48,12 +48,11 @@ pub fn main_quit(return_code: i32) {
 /// Run an `Application` until termination.
 pub fn run<C: 'static + Component>() -> i32 {
     gtk::init().expect("GTK failed to initialise");
-    let (_scope, channel, view, mut task) =
-        ComponentTask::<C, ()>::new_defer(Default::default(), None, None);
-    let app: Application = task.object().downcast().unwrap_or_else(|_| {
+    let partial_task = PartialComponentTask::<C, ()>::new(Default::default(), None, None);
+    let app: Application = partial_task.object().downcast().unwrap_or_else(|_| {
         panic!(
             "The top level object must be an Application, but {} was found.",
-            task.object().get_type()
+            partial_task.object().get_type()
         )
     });
     app.set_default();
@@ -61,7 +60,7 @@ pub fn run<C: 'static + Component>() -> i32 {
         .expect("application already running");
 
     let constructor = Mutex::new(Cell::new(Some(move |app: &Application| {
-        task.finalise_deferred(view);
+        let (channel, task) = partial_task.finalise();
         MainContext::ref_thread_default().spawn_local(task);
         for window in app.get_windows() {
             window.show_all();
@@ -84,7 +83,7 @@ pub fn run<C: 'static + Component>() -> i32 {
 pub fn run_dialog<C: 'static + Component>(
     parent: Option<&GdkWindow>,
 ) -> impl Future<Output = Result<ResponseType, Canceled>> {
-    let (_scope, channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
+    let (channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
     let dialog: Dialog = task
         .object()
         .downcast()

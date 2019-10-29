@@ -64,34 +64,32 @@ impl<C: Component> Clone for ComponentMessage<C> {
     }
 }
 
-pub struct ComponentTask<C, P>
+pub(crate) struct PartialComponentTask<C, P>
 where
     C: Component,
     P: Component,
 {
-    scope: Scope<C>,
-    parent_scope: Option<Scope<P>>,
-    state: C,
-    ui_state: State<C>,
-    channel: Pin<Box<dyn Stream<Item = ComponentMessage<C>>>>,
-    finalised: bool,
+    task: ComponentTask<C, P>,
+    view: VNode<C>,
+    sender: UnboundedSender<ComponentMessage<C>>,
 }
 
-impl<C, P> ComponentTask<C, P>
+impl<C, P> PartialComponentTask<C, P>
 where
     C: 'static + Component,
     P: 'static + Component,
 {
-    pub(crate) fn new_defer(
+    /// Start building a `ComponentTask` by initialising the task and the root
+    /// object but not the children.
+    ///
+    /// This is generally only useful when you're constructing an `Application`,
+    /// where windows should not be added to it until it's been activated, but
+    /// you need to have the `Application` object in order to activate it.
+    pub(crate) fn new(
         props: C::Properties,
         parent: Option<&Object>,
         parent_scope: Option<&Scope<P>>,
-    ) -> (
-        Scope<C>,
-        UnboundedSender<ComponentMessage<C>>,
-        VNode<C>,
-        Self,
-    ) {
+    ) -> Self {
         let (sys_send, sys_recv) = unbounded();
         let (user_send, user_recv) = unbounded();
 
@@ -111,40 +109,61 @@ where
         let state = C::create(props);
         let initial_view = state.view();
         let ui_state = State::build_root(&initial_view, parent, &scope);
-        (
-            scope.clone(),
-            sys_send,
-            initial_view,
-            ComponentTask {
+        PartialComponentTask {
+            task: ComponentTask {
                 scope,
                 parent_scope: parent_scope.cloned(),
                 state,
                 ui_state,
                 channel,
-                finalised: false,
             },
-        )
+            view: initial_view,
+            sender: sys_send,
+        }
     }
 
-    pub(crate) fn finalise_deferred(&mut self, view: VNode<C>) {
-        self.ui_state.build_children(&view, &self.scope);
-        self.finalised = true;
+    /// Finalise the partially constructed `ComponentTask` by constructing its
+    /// children.
+    pub(crate) fn finalise(
+        mut self,
+    ) -> (UnboundedSender<ComponentMessage<C>>, ComponentTask<C, P>) {
+        self.task
+            .ui_state
+            .build_children(&self.view, &self.task.scope);
+        (self.sender, self.task)
     }
 
+    pub fn object(&self) -> Object {
+        self.task.ui_state.object().clone()
+    }
+}
+
+pub struct ComponentTask<C, P>
+where
+    C: Component,
+    P: Component,
+{
+    scope: Scope<C>,
+    parent_scope: Option<Scope<P>>,
+    state: C,
+    ui_state: State<C>,
+    channel: Pin<Box<dyn Stream<Item = ComponentMessage<C>>>>,
+}
+
+impl<C, P> ComponentTask<C, P>
+where
+    C: 'static + Component,
+    P: 'static + Component,
+{
     pub(crate) fn new(
         props: C::Properties,
         parent: Option<&Object>,
         parent_scope: Option<&Scope<P>>,
-    ) -> (Scope<C>, UnboundedSender<ComponentMessage<C>>, Self) {
-        let (scope, channel, view, mut task) = Self::new_defer(props, parent, parent_scope);
-        task.finalise_deferred(view);
-        (scope, channel, task)
+    ) -> (UnboundedSender<ComponentMessage<C>>, Self) {
+        PartialComponentTask::new(props, parent, parent_scope).finalise()
     }
 
     pub fn process(&mut self, ctx: &mut Context) -> Poll<()> {
-        if !self.finalised {
-            panic!("component being used before its constructor has been finalised!");
-        }
         let mut render = false;
         loop {
             match Stream::poll_next(self.channel.as_mut(), ctx) {
