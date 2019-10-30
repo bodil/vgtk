@@ -2,34 +2,24 @@ use gdk_pixbuf::Pixbuf;
 use gio::ApplicationFlags;
 use glib::{GString, Object};
 use gtk::{
-    Application, Box, BoxExt, GtkWindowExt, Image, ImageExt, Label, LabelExt, Window,
-    WindowPosition, WindowType,
+    Application, BoxExt, GtkApplicationExt, GtkWindowExt, ImageExt, LabelExt, WindowPosition,
+    WindowType,
 };
 
-pub trait ApplicationHelpers {
+pub trait ApplicationHelpers: GtkApplicationExt {
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application;
 }
 
-impl ApplicationHelpers for Application {
+impl<A> ApplicationHelpers for A
+where
+    A: GtkApplicationExt,
+{
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
         Application::new(application_id, flags).expect("unable to create Application object")
     }
 }
 
 pub trait WindowExtHelpers: GtkWindowExt {
-    fn get_default_height(&self) -> i32;
-    fn set_default_height(&self, default_height: i32);
-    fn get_default_width(&self) -> i32;
-    fn set_default_width(&self, default_width: i32);
-    fn get_has_toplevel_focus(&self) -> bool;
-    fn get_is_active(&self) -> bool;
-    fn get_is_maximized(&self) -> bool;
-    fn get_type(&self) -> WindowType;
-    fn get_window_position(&self) -> WindowPosition;
-    fn set_window_position(&self, window_position: WindowPosition);
-}
-
-impl WindowExtHelpers for Window {
     fn get_default_height(&self) -> i32 {
         self.get_property_default_height()
     }
@@ -71,12 +61,9 @@ impl WindowExtHelpers for Window {
     }
 }
 
-pub trait BoxExtHelpers: BoxExt {
-    fn get_child_center_widget(&self, child: &Object) -> bool;
-    fn set_child_center_widget(&self, child: &Object, center: bool);
-}
+impl<A> WindowExtHelpers for A where A: GtkWindowExt {}
 
-impl BoxExtHelpers for Box {
+pub trait BoxExtHelpers: BoxExt {
     fn get_child_center_widget(&self, _child: &Object) -> bool {
         // Always compare true, it's all taken care of in add_child().
         true
@@ -87,22 +74,20 @@ impl BoxExtHelpers for Box {
     }
 }
 
-pub trait ImageExtHelpers: ImageExt {
-    fn set_pixbuf(&self, pixbuf: Option<Pixbuf>);
-}
+impl<A> BoxExtHelpers for A where A: BoxExt {}
 
-impl ImageExtHelpers for Image {
+pub trait ImageExtHelpers: ImageExt {
     fn set_pixbuf(&self, pixbuf: Option<Pixbuf>) {
         self.set_from_pixbuf(pixbuf.as_ref());
     }
 }
 
-pub trait LabelExtHelpers: LabelExt {
-    fn get_markup(&self) -> Option<GString>;
-}
+impl<A> ImageExtHelpers for A where A: ImageExt {}
 
-impl LabelExtHelpers for Label {
+pub trait LabelExtHelpers: LabelExt {
     fn get_markup(&self) -> Option<GString> {
         self.get_label()
     }
 }
+
+impl<A> LabelExtHelpers for A where A: LabelExt {}

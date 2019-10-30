@@ -57,22 +57,21 @@ pub fn run<C: 'static + Component>() -> i32 {
     });
     app.set_default();
     app.register(None as Option<&Cancellable>)
-        .expect("application already running");
+        .expect("unable to register Application");
 
-    let constructor = Mutex::new(Cell::new(Some(move |app: &Application| {
+    let constructor = Mutex::new(Cell::new(Some(move || {
         let (channel, task) = partial_task.finalise();
         MainContext::ref_thread_default().spawn_local(task);
-        for window in app.get_windows() {
-            window.show_all();
-        }
         channel.unbounded_send(ComponentMessage::Mounted).unwrap();
     })));
 
     app.connect_activate(move |app| {
         debug!("Application has activated.");
         if let Some(constructor) = constructor.lock().unwrap().take() {
-            constructor(app);
+            constructor();
         }
+        app.set_accels_for_action("app.quit", &["<Ctrl>o"]);
+        debug!("Actions: {:?}", app.list_action_descriptions());
     });
     app.activate();
     run_main_loop()

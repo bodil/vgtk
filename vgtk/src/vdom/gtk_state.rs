@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
+use gio::{Action, ActionExt, ActionMapExt};
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
-    self, prelude::*, Application, Bin, Box as GtkBox, Builder, Container, Dialog, Menu,
-    MenuButton, MenuItem, Widget, Window,
+    self, prelude::*, Application, ApplicationWindow, Bin, Box as GtkBox, Builder, Container,
+    Dialog, Menu, MenuButton, MenuItem, ShortcutsWindow, Widget, Window,
 };
 
 use super::State;
@@ -48,9 +49,11 @@ fn add_child<Model: Component>(
     if let Some(application) = parent.downcast_ref::<Application>() {
         if let Some(window) = child.downcast_ref::<Window>() {
             application.add_window(window);
+        } else if let Some(action) = child.downcast_ref::<Action>() {
+            application.add_action(action);
         } else {
             panic!(
-                "Application's children must be Windows, but {} was found.",
+                "Application's children must be Windows or Actions, but {} was found.",
                 child.get_type()
             );
         }
@@ -97,16 +100,35 @@ fn add_child<Model: Component>(
                 child.get_type()
             );
         }
-    } else if let Some(window) = parent.downcast_ref::<Window>() {
-        // Window: if 1 child, it's the window's main widget. If 2 children, the
-        // first is the title bar and the second is the main widget. More than 2
-        // is not ok.
-        if total > 2 {
+    } else if let Some(window) = parent.downcast_ref::<ApplicationWindow>() {
+        // ApplicationWindow: takes any number of Actions, optionally one
+        // ShortcutsWindow added with `set_help_overlay()`, and either 1 or 2
+        // Widgets. If 1, it's the main widget. If 2, the first is added with
+        // `set_titlebar()` and the second is the main widget.
+        if let Some(action) = child.downcast_ref::<Action>() {
+            window.add_action(action);
+        } else if let Some(help_overlay) = child.downcast_ref::<ShortcutsWindow>() {
+            window.set_help_overlay(Some(help_overlay));
+        } else if let Some(widget) = child.downcast_ref::<Widget>() {
+            match window.get_child() {
+                None => window.add(widget),
+                Some(ref titlebar) if window.get_titlebar().is_none() => {
+                    window.remove(titlebar);
+                    window.set_titlebar(Some(titlebar));
+                    window.add(widget);
+                }
+                _ => panic!("ApplicationWindow can have at most two Widget children."),
+            }
+        } else {
             panic!(
-                "Windows can only have 1 or 2 children, but {} were found.",
-                total
+                "ApplicationWindow's children must be Actions or Widgets, but {} was found.",
+                child.get_type()
             );
         }
+    } else if let Some(window) = parent.downcast_ref::<Window>() {
+        // Window: takes only 1 or 2 Widgets. If 1 widget child, it's the
+        // window's main widget. If 2, the first is the title bar and the second
+        // is the main widget. More than 2 goes boom.
         if let Some(widget) = child.downcast_ref::<Widget>() {
             if total == 2 && index == 0 {
                 window.set_titlebar(Some(widget));
@@ -172,6 +194,8 @@ fn remove_child(parent: &Object, child: &Object) {
     if let Some(application) = parent.downcast_ref::<Application>() {
         if let Some(window) = child.downcast_ref::<Window>() {
             application.remove_window(window);
+        } else if let Some(action) = child.downcast_ref::<Action>() {
+            application.remove_action(&action.get_name().expect("Action unexpectedly has no name"));
         } else {
             panic!(
                 "Applications can only contain Windows, but was asked to remove a {}.",

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use gio::ApplicationFlags;
+use gio::{ActionExt, ApplicationFlags, SimpleAction};
 use gtk::prelude::*;
 use gtk::*;
 use vgtk::{ext::*, gtk, Component, VNode};
@@ -158,18 +158,27 @@ impl Component for Model {
 
         gtk! {
             <Application::new_unwrap(Some("camp.lol.todomvc"), ApplicationFlags::empty())>
-                <Window default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
+
+                <SimpleAction::new("quit", None) enabled=true on activate=|a, _| {Msg::Exit}/>
+
+                <ApplicationWindow default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
+
+                    <SimpleAction::new("open", None) enabled=true on activate=|a, _| {Msg::MenuOpen}/>
+                    <SimpleAction::new("save", None) enabled={self.items.has_path() && !self.clean} on activate=|_, _| {Msg::MenuSave}/>
+                    <SimpleAction::new("save_as", None) enabled=true on activate=|_, _| {Msg::MenuSaveAs}/>
+
                     <HeaderBar title={format!("TodoMVC - {}{}", title, clean)} subtitle="wtf do we do now" show_close_button=true>
                         <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
                                     image="open-menu-symbolic">
                             <Menu>
-                                <MenuItem label="Open..." @GtkMenuItemExt::accel_path="open" on activate=|_| {Msg::MenuOpen}/>
+                                <MenuItem label="Open..." action_name="win.open" @GtkMenuItemExt::accel_path="win.open" />
                                 <SeparatorMenuItem/>
-                                <MenuItem label="Save" @GtkMenuItemExt::accel_path="save" sensitive={self.items.has_path() && !self.clean}
-                                          on activate=|_| {Msg::MenuSave}/>
-                                <MenuItem label="Save as..." @GtkMenuItemExt::accel_path="save_as" on activate=|_| {Msg::MenuSaveAs}/>
+                                <MenuItem label="Save" action_name="win.save" />
+                                <MenuItem label="Save as..." action_name="win.save_as" />
                                 <SeparatorMenuItem/>
                                 <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
+                                <SeparatorMenuItem/>
+                                <MenuItem label="Quit" action_name="app.quit" />
                             </Menu>
                         </MenuButton>
                     </HeaderBar>
@@ -210,7 +219,7 @@ impl Component for Model {
                             }
                         </Box>
                     </Box>
-                </Window>
+                </ApplicationWindow>
             </Application>
         }
     }
