@@ -11,7 +11,6 @@ use proc_macro_hack::proc_macro_hack;
 #[proc_macro_hack(support_nested)]
 pub use vgtk_macros::gtk;
 
-use gdk::Window as GdkWindow;
 use gio::prelude::*;
 use gio::Cancellable;
 use glib::futures::{
@@ -21,14 +20,14 @@ use glib::futures::{
 use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
-use gtk::{Application, Dialog, ResponseType};
+use gtk::{Application, Dialog, ResponseType, Window};
 
 use log::debug;
 
 use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
 
 pub use crate::callback::Callback;
-pub use crate::component::{current_object, Component, UpdateAction};
+pub use crate::component::{current_object, current_window, Component, UpdateAction};
 pub use crate::menu_builder::{menu, MenuBuilder};
 pub use crate::scope::Scope;
 pub use crate::vnode::{PropTransform, VComponent, VHandler, VNode, VObject, VProperty};
@@ -70,7 +69,7 @@ pub fn run<C: 'static + Component>() -> i32 {
 /// Launch a modal `Dialog`. The parent window will be blocked until it
 /// resolves.
 pub fn run_dialog<C: 'static + Component>(
-    parent: Option<&GdkWindow>,
+    parent: Option<&Window>,
 ) -> impl Future<Output = Result<ResponseType, Canceled>> {
     let (channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
     let dialog: Dialog = task
@@ -79,7 +78,7 @@ pub fn run_dialog<C: 'static + Component>(
         .downcast()
         .expect("Dialog must be a gtk::Dialog");
     if let Some(parent) = parent {
-        dialog.set_parent_window(parent);
+        dialog.set_transient_for(Some(parent));
     }
     MainContext::ref_thread_default().spawn_local(task);
     let (notify, result) = oneshot::channel();

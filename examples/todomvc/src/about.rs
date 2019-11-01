@@ -44,11 +44,6 @@ impl Component for AboutDialog {
 impl AboutDialog {
     #[allow(unused_must_use)]
     pub fn run() {
-        run_dialog::<Self>(
-            vgtk::current_object()
-                .and_then(|o| o.downcast::<Widget>().ok())
-                .and_then(|w| w.get_parent_window())
-                .as_ref(),
-        );
+        run_dialog::<Self>(vgtk::current_window().as_ref());
     }
 }

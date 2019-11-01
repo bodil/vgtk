@@ -4,7 +4,8 @@ use glib::futures::{
     task::Context,
     Future, Poll, StreamExt,
 };
-use glib::{Object, ObjectExt, WeakRef};
+use glib::{Cast, Object, ObjectExt, WeakRef};
+use gtk::{Application, GtkApplicationExt, Widget, WidgetExt, Window};
 
 use std::any::TypeId;
 use std::fmt::{Debug, Error, Formatter};
@@ -278,6 +279,21 @@ pub fn current_object() -> Option<Object> {
         lock.current_object
             .as_ref()
             .and_then(|object| object.upgrade())
+    })
+}
+
+pub fn current_window() -> Option<Window> {
+    current_object().and_then(|obj| match obj.downcast::<Window>() {
+        Ok(window) => Some(window),
+        Err(obj) => match obj.downcast::<Application>() {
+            Ok(app) => app.get_active_window(),
+            Err(obj) => match obj.downcast::<Widget>() {
+                Ok(widget) => widget
+                    .get_toplevel()
+                    .and_then(|toplevel| toplevel.downcast::<Window>().ok()),
+                _ => None,
+            },
+        },
     })
 }
 
