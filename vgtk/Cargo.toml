@@ -17,4 +17,4 @@ log = "0.4.8"
 
 [dependencies.gtk]
 version = "0.7.0"
-features = ["futures", "embed-lgpl-docs"]
+features = ["futures", "embed-lgpl-docs", "v3_20"]
