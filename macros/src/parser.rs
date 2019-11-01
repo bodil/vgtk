@@ -111,8 +111,16 @@ pub fn closure_args<'a>() -> impl Parser<'a, Token, Vec<Token>> {
     punct('|').right(expect(any(not_punct('|')).left(punct('|'))))
 }
 
-pub fn closure<'a>() -> impl Parser<'a, Token, (Vec<Token>, Vec<Token>)> {
+pub fn bare_closure<'a>() -> impl Parser<'a, Token, (Vec<Token>, Vec<Token>)> {
     closure_args().pair(expect(rust_expr()))
+}
+
+pub fn async_closure<'a>() -> impl Parser<'a, Token, (Token, (Vec<Token>, Vec<Token>))> {
+    match_ident("async").pair(bare_closure())
+}
+
+pub fn closure<'a>() -> impl Parser<'a, Token, (Option<Token>, (Vec<Token>, Vec<Token>))> {
+    async_closure().map(|(a, c)| (Some(a), c)) | bare_closure().map(|c| (None, c))
 }
 
 pub fn property_attr<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Attribute> {
@@ -136,7 +144,12 @@ pub fn property_attr<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, At
 pub fn handler_attr<'a>(input: &Cursor<'a, Token>) -> ParseResult<'a, Token, Attribute> {
     match_ident("on")
         .right(expect(ident().pair(punct('=').right(closure())).map(
-            |(name, (args, body))| Attribute::Handler { name, args, body },
+            |(name, (async_keyword, (args, body)))| Attribute::Handler {
+                name,
+                async_keyword,
+                args,
+                body,
+            },
         )))
         .parse(input)
 }

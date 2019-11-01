@@ -127,9 +127,12 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
                     )
                 }
             }
-            Attribute::Handler { name, args, body } => {
-                expand_handler(&gtk.name, &name, &args, &body)
-            }
+            Attribute::Handler {
+                name,
+                async_keyword,
+                args,
+                body,
+            } => expand_handler(&gtk.name, &name, async_keyword.as_ref(), &args, &body),
         });
     }
     for child in &gtk.children {
@@ -233,6 +236,7 @@ pub fn expand_property(
 pub fn expand_handler(
     object_type: &Ident,
     name: &Ident,
+    async_keyword: Option<&Token>,
     args: &[Token],
     body: &[Token],
 ) -> TokenStream {
@@ -242,6 +246,21 @@ pub fn expand_handler(
     let signal_name = to_string_literal(name);
     let location = args.first().expect("signal handler is empty!").span();
     let signal_id = to_string_literal(format!("{:?}", location));
+    let inner_block = if async_keyword.is_some() {
+        quote!({
+            use futures::future::{ok, FutureExt};
+            let scope = scope.clone();
+            let send = move |msg| scope.send_message(msg);
+            glib::MainContext::ref_thread_default().spawn_local(
+                async move { #body_s }.map(send)
+            )
+        })
+    } else {
+        quote!({
+            let msg = { #body_s };
+            scope.send_message(msg);
+        })
+    };
     quote!(
         handlers.push(VHandler {
             name: #signal_name,
@@ -250,10 +269,7 @@ pub fn expand_handler(
                 let object: &#object_type = object.downcast_ref()
                       .unwrap_or_else(|| panic!("downcast to {:?} failed in signal setter", #object_type::static_type()));
                 let scope: Scope<_> = scope.clone();
-                object.#connect(move | #args_s | {
-                    let msg = { #body_s };
-                    scope.send_message(msg);
-                })
+                object.#connect(move | #args_s | #inner_block)
             })
         });
     )

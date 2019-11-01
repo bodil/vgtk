@@ -35,6 +35,7 @@ pub enum Attribute {
     },
     Handler {
         name: Ident,
+        async_keyword: Option<Token>,
         args: Vec<Token>,
         body: Vec<Token>,
     },
@@ -67,13 +68,24 @@ impl Debug for Attribute {
                 }
                 write!(f, "( {} = {} )", name, attrs.join(", "))
             }
-            Attribute::Handler { name, args, body } => {
+            Attribute::Handler {
+                name,
+                async_keyword,
+                args,
+                body,
+            } => {
                 let args: Vec<String> = args.iter().map(stringify_attr_value).collect();
                 let attrs: Vec<String> = body.iter().map(stringify_attr_value).collect();
+                let async_keyword = if async_keyword.is_some() {
+                    "async "
+                } else {
+                    ""
+                };
                 write!(
                     f,
-                    "( {} = {} {} )",
+                    "( {} = {}{} {} )",
                     name.to_string(),
+                    async_keyword,
                     args.join(", "),
                     attrs.join(", ")
                 )
