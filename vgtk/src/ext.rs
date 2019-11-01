@@ -1,23 +1,92 @@
 use gdk_pixbuf::Pixbuf;
-use gio::ApplicationFlags;
-use glib::{GString, Object};
+use gio::{Action, ActionExt, ApplicationFlags};
+use glib::{GString, IsA, Object, ObjectExt};
 use gtk::{
-    Application, BoxExt, GtkApplicationExt, GtkWindowExt, ImageExt, LabelExt, WindowPosition,
-    WindowType,
+    Application, ApplicationWindowExt, BoxExt, GtkApplicationExt, GtkWindowExt, ImageExt, LabelExt,
+    Window, WindowPosition, WindowType,
 };
 
-pub trait ApplicationHelpers: GtkApplicationExt {
-    fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application;
-}
+use log::debug;
 
-impl<A> ApplicationHelpers for A
-where
-    A: GtkApplicationExt,
-{
+pub trait ApplicationHelpers: GtkApplicationExt {
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
         Application::new(application_id, flags).expect("unable to create Application object")
     }
+
+    fn get_child_accels<P: IsA<Action>>(&self, action: &P) -> Vec<GString> {
+        self.get_accels_for_action(&format!(
+            "app.{}",
+            action
+                .as_ref()
+                .get_name()
+                .expect("Action has no name")
+                .as_str()
+        ))
+    }
+
+    fn set_child_accels<P: IsA<Action>>(&self, action: &P, accels: &[&str]) {
+        self.set_accels_for_action(
+            &format!(
+                "app.{}",
+                action
+                    .as_ref()
+                    .get_name()
+                    .expect("Action has no name")
+                    .as_str()
+            ),
+            accels,
+        )
+    }
 }
+
+impl<A> ApplicationHelpers for A where A: GtkApplicationExt {}
+
+pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Window> {
+    fn get_child_accels<P: IsA<Action>>(&self, action: &P) -> Vec<GString> {
+        let app = self
+            .get_application()
+            .expect("ApplicationWindow has no Application!");
+        app.get_accels_for_action(&format!(
+            "win.{}",
+            action
+                .as_ref()
+                .get_name()
+                .expect("Action has no name")
+                .as_str()
+        ))
+    }
+
+    fn set_child_accels<P: IsA<Action>>(&self, action: &P, accels: &'static [&str]) {
+        let name = format!(
+            "win.{}",
+            action
+                .as_ref()
+                .get_name()
+                .expect("Action has no name")
+                .as_str()
+        );
+        if let Some(app) = self.get_application() {
+            app.set_accels_for_action(&name, accels);
+        } else {
+            use std::cell::Cell;
+            use std::rc::Rc;
+
+            let id = Rc::new(Cell::new(None));
+            let inner_id = id.clone();
+            id.set(Some(self.connect_property_application_notify(
+                move |window: &Self| {
+                    if let Some(app) = window.get_application() {
+                        debug!("Action: {:?} -> {:?}", name, accels);
+                        app.set_accels_for_action(&name, accels);
+                        window.disconnect(inner_id.replace(None).unwrap());
+                    }
+                },
+            )));
+        }
+    }
+}
+
+impl<A> ApplicationWindowHelpers for A where A: ApplicationWindowExt + GtkWindowExt + IsA<Window> {}
 
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32 {

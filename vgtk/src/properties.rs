@@ -155,6 +155,12 @@ impl<'a> PropertyValueCoerce<'a, Option<&'a Image>> for Image {
     }
 }
 
+impl PropertyValueCompare<'_, Vec<GString>> for &'_ [&'_ str] {
+    fn property_compare(left: Vec<GString>, right: &&[&str]) -> bool {
+        left == *right
+    }
+}
+
 pub trait IntoPropertyValue<'a, A, Get, Set>
 where
     A: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set> + 'a,

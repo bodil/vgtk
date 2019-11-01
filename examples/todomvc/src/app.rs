@@ -97,7 +97,6 @@ impl Component for Model {
             }
             Msg::Filter { filter } => {
                 self.filter = filter;
-                self.clean = false;
             }
             Msg::ToggleAll if left > 0 => {
                 self.items.iter_mut().for_each(|item| item.done = true);
@@ -156,30 +155,38 @@ impl Component for Model {
         };
         let clean = if self.clean { "" } else { " *" };
 
+        use vgtk::menu;
+        let main_menu = menu()
+            .section(menu().item("Open...", "win.open"))
+            .section(
+                menu()
+                    .item("Save", "win.save")
+                    .item("Save as...", "win.save-as"),
+            )
+            .section(menu().item("About...", "app.about"))
+            .section(menu().item("Quit", "app.quit"))
+            .build();
+
         gtk! {
             <Application::new_unwrap(Some("camp.lol.todomvc"), ApplicationFlags::empty())>
 
-                <SimpleAction::new("quit", None) enabled=true on activate=|a, _| {Msg::Exit}/>
+                <SimpleAction::new("quit", None) Application::accels={["<Ctrl>q"].as_ref()} enabled=true
+                        on activate=|a, _| {Msg::Exit}/>
+                <SimpleAction::new("about", None) enabled=true on activate=|_, _| {Msg::MenuAbout}/>
 
                 <ApplicationWindow default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
 
-                    <SimpleAction::new("open", None) enabled=true on activate=|a, _| {Msg::MenuOpen}/>
-                    <SimpleAction::new("save", None) enabled={self.items.has_path() && !self.clean} on activate=|_, _| {Msg::MenuSave}/>
-                    <SimpleAction::new("save_as", None) enabled=true on activate=|_, _| {Msg::MenuSaveAs}/>
+                    <SimpleAction::new("open", None) ApplicationWindow::accels={["<Ctrl>o"].as_ref()}
+                                                     enabled=true on activate=|a, _| {Msg::MenuOpen}/>
+                    <SimpleAction::new("save", None) ApplicationWindow::accels={["<Ctrl>s"].as_ref()}
+                                                     enabled={self.items.has_path() && !self.clean} on activate=|_, _| {Msg::MenuSave}/>
+                    <SimpleAction::new("save-as", None) ApplicationWindow::accels={["<Ctrl><Shift>s"].as_ref()}
+                                                        enabled=true on activate=|_, _| {Msg::MenuSaveAs}/>
 
                     <HeaderBar title={format!("TodoMVC - {}{}", title, clean)} subtitle="wtf do we do now" show_close_button=true>
                         <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
                                     image="open-menu-symbolic">
-                            <Menu>
-                                <MenuItem label="Open..." action_name="win.open" @GtkMenuItemExt::accel_path="win.open" />
-                                <SeparatorMenuItem/>
-                                <MenuItem label="Save" action_name="win.save" />
-                                <MenuItem label="Save as..." action_name="win.save_as" />
-                                <SeparatorMenuItem/>
-                                <MenuItem label="About..." on activate=|_| {Msg::MenuAbout}/>
-                                <SeparatorMenuItem/>
-                                <MenuItem label="Quit" action_name="app.quit" />
-                            </Menu>
+                            <Menu::new_from_model(&main_menu)/>
                         </MenuButton>
                     </HeaderBar>
                     <Box spacing=10 orientation={Orientation::Vertical}>

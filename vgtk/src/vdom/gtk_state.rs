@@ -245,7 +245,7 @@ impl<Model: 'static + Component> GtkState<Model> {
         }
 
         GtkState {
-            object: object.clone().upcast(),
+            object: object.upcast(),
             handlers,
             children: Vec::new(),
         }
