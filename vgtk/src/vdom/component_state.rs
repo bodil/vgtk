@@ -1,12 +1,12 @@
 use glib::futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
-use glib::Object;
+use glib::{MainContext, Object};
+use gtk::{Widget, WidgetExt};
 
 use std::any::TypeId;
 use std::marker::PhantomData;
 
 use crate::component::{Component, ComponentMessage, ComponentTask};
-use crate::mainloop::MainLoop;
 use crate::scope::Scope;
 use crate::vnode::component::AnyProps;
 use crate::vnode::{VComponent, VProperty};
@@ -59,6 +59,13 @@ impl<Model: 'static + Component> ComponentState<Model> {
             false
         }
     }
+
+    pub fn unmount(self) {
+        self.state.unmounting();
+        if let Ok(widget) = self.object.downcast::<Widget>() {
+            widget.destroy();
+        }
+    }
 }
 
 pub struct SubcomponentState<Model: Component> {
@@ -74,12 +81,11 @@ impl<Model: 'static + Component> SubcomponentState<Model> {
     ) -> (Self, Object) {
         let props: Model::Properties = props.unwrap();
         let (channel, task) = ComponentTask::new(props, parent, Some(parent_scope));
-        let object = task.object();
+        let object = task.object().unwrap();
         for prop in child_props {
             (prop.set)(object.upcast_ref(), parent, true);
         }
-
-        crate::MAIN_LOOP.with(|main_loop| main_loop.spawn(task));
+        MainContext::ref_thread_default().spawn_local(task);
         (SubcomponentState { channel }, object)
     }
 }

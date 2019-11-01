@@ -4,31 +4,39 @@ use glib::futures::{
     task::Context,
     Future, Poll, StreamExt,
 };
-use glib::Object;
-use glib::{ObjectExt, WeakRef};
+use glib::{Object, ObjectExt, WeakRef};
 
 use std::any::TypeId;
-use std::fmt::Debug;
+use std::fmt::{Debug, Error, Formatter};
 use std::pin::Pin;
 use std::sync::RwLock;
+
+use log::{debug, trace};
 
 use crate::scope::{AnyScope, Scope};
 use crate::vdom::State;
 use crate::vnode::VNode;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum UpdateAction {
+    None,
+    Render,
+}
+
 pub trait Component: Default + Unpin {
     type Message: Clone + Send + Debug;
     type Properties: Clone + Default;
-    fn update(&mut self, _msg: Self::Message) -> bool {
-        false
+
+    fn update(&mut self, _msg: Self::Message) -> UpdateAction {
+        UpdateAction::None
     }
 
     fn create(_props: Self::Properties) -> Self {
         Self::default()
     }
 
-    fn change(&mut self, _props: Self::Properties) -> bool {
-        unimplemented!()
+    fn change(&mut self, _props: Self::Properties) -> UpdateAction {
+        unimplemented!("add a Component::change() implementation")
     }
 
     fn mounted(&mut self) {}
@@ -51,6 +59,21 @@ pub(crate) enum ComponentMessage<C: Component> {
     Props(C::Properties),
     Mounted,
     Unmounted,
+}
+
+impl<C: Component> Debug for ComponentMessage<C> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            ComponentMessage::Update(msg) => {
+                write!(f, "ComponentMessage::Update(")?;
+                msg.fmt(f)?;
+                write!(f, ")")
+            }
+            ComponentMessage::Props(_) => write!(f, "ComponentMessage::Props(...)"),
+            ComponentMessage::Mounted => write!(f, "ComponentMessage::Mounted"),
+            ComponentMessage::Unmounted => write!(f, "ComponentMessage::Unmounted"),
+        }
+    }
 }
 
 impl<C: Component> Clone for ComponentMessage<C> {
@@ -114,7 +137,7 @@ where
                 scope,
                 parent_scope: parent_scope.cloned(),
                 state,
-                ui_state,
+                ui_state: Some(ui_state),
                 channel,
             },
             view: initial_view,
@@ -127,14 +150,14 @@ where
     pub(crate) fn finalise(
         mut self,
     ) -> (UnboundedSender<ComponentMessage<C>>, ComponentTask<C, P>) {
-        self.task
-            .ui_state
-            .build_children(&self.view, &self.task.scope);
+        if let Some(ref mut ui_state) = self.task.ui_state {
+            ui_state.build_children(&self.view, &self.task.scope);
+        }
         (self.sender, self.task)
     }
 
     pub fn object(&self) -> Object {
-        self.task.ui_state.object().clone()
+        self.task.ui_state.as_ref().unwrap().object().clone()
     }
 }
 
@@ -146,7 +169,7 @@ where
     scope: Scope<C>,
     parent_scope: Option<Scope<P>>,
     state: C,
-    ui_state: State<C>,
+    ui_state: Option<State<C>>,
     channel: Pin<Box<dyn Stream<Item = ComponentMessage<C>>>>,
 }
 
@@ -166,37 +189,61 @@ where
     pub fn process(&mut self, ctx: &mut Context) -> Poll<()> {
         let mut render = false;
         loop {
-            match Stream::poll_next(self.channel.as_mut(), ctx) {
+            let next = Stream::poll_next(self.channel.as_mut(), ctx);
+            trace!("{}: {:?}", self.scope.name(), next);
+            match next {
                 Poll::Ready(Some(msg)) => match msg {
                     ComponentMessage::Update(msg) => {
-                        if self.state.update(msg) {
+                        if self.state.update(msg) == UpdateAction::Render {
                             render = true;
                         }
                     }
                     ComponentMessage::Props(props) => {
-                        if self.state.change(props) {
+                        if self.state.change(props) == UpdateAction::Render {
                             render = true;
                         }
                     }
                     ComponentMessage::Mounted => {
+                        debug!("Component mounted: {}", self.scope.name());
                         self.state.mounted();
                     }
                     ComponentMessage::Unmounted => {
+                        if let Some(state) = self.ui_state.take() {
+                            state.unmount();
+                        }
                         self.state.unmounted();
+                        debug!("Component unmounted: {}", self.scope.name());
+                        return Poll::Ready(());
                     }
                 },
                 Poll::Pending if render => {
-                    // we patch
-                    let new_view = self.state.view();
-                    self.scope.mute();
-                    if !self.ui_state.patch(&new_view, None, &self.scope) {
-                        unimplemented!("don't know how to propagate failed patch");
+                    if let Some(ref mut ui_state) = self.ui_state {
+                        // we patch
+                        let new_view = self.state.view();
+                        self.scope.mute();
+                        trace!("{}: patching", self.scope.name());
+                        if !ui_state.patch(&new_view, None, &self.scope) {
+                            trace!("{}: patch failed!", self.scope.name());
+                            unimplemented!(
+                                "{}: don't know how to propagate failed patch",
+                                self.scope.name()
+                            );
+                        }
+                        self.scope.unmute();
+                        return Poll::Pending;
+                    } else {
+                        debug!(
+                            "component {} rendering in the absence of a UI state; exiting",
+                            self.scope.name()
+                        );
+                        return Poll::Ready(());
                     }
-                    self.scope.unmute();
-                    return Poll::Pending;
                 }
                 Poll::Ready(None) => {
-                    println!("task terminating because channel handles all dropped");
+                    debug!(
+                        "Component {} terminating because all channel handles dropped",
+                        self.scope.name()
+                    );
                     return Poll::Ready(());
                 }
                 Poll::Pending => return Poll::Pending,
@@ -204,8 +251,8 @@ where
         }
     }
 
-    pub fn object(&self) -> Object {
-        self.ui_state.object().clone()
+    pub fn object(&self) -> Option<Object> {
+        self.ui_state.as_ref().map(|state| state.object().clone())
     }
 
     pub(crate) fn current_parent_scope() -> Scope<C> {
@@ -255,7 +302,10 @@ where
         LOCAL_CONTEXT.with(|key| {
             *key.write().unwrap() = LocalContext {
                 parent_scope: self.parent_scope.as_ref().map(|scope| scope.clone().into()),
-                current_object: Some(self.ui_state.object().downgrade()),
+                current_object: self
+                    .ui_state
+                    .as_ref()
+                    .map(|state| state.object().downgrade()),
             };
         });
         let polled = self.get_mut().process(ctx);

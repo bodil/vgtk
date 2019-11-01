@@ -1,7 +1,6 @@
 mod callback;
 mod component;
 pub mod ext;
-mod mainloop;
 mod menu_builder;
 pub mod properties;
 mod scope;
@@ -27,22 +26,12 @@ use gtk::{Application, Dialog, ResponseType};
 use log::debug;
 
 use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
-use crate::mainloop::{GtkMainLoop, MainLoop};
 
 pub use crate::callback::Callback;
-pub use crate::component::{current_object, Component};
+pub use crate::component::{current_object, Component, UpdateAction};
 pub use crate::menu_builder::{menu, MenuBuilder};
 pub use crate::scope::Scope;
 pub use crate::vnode::{PropTransform, VComponent, VHandler, VNode, VObject, VProperty};
-
-thread_local! {
-    pub static MAIN_LOOP: GtkMainLoop = GtkMainLoop::new(MainContext::default());
-}
-
-/// Signal the main loop to terminate with the given return code.
-pub fn main_quit(return_code: i32) {
-    MAIN_LOOP.with(|main_loop| main_loop.quit(return_code))
-}
 
 /// Run an `Application` component until termination.
 pub fn run<C: 'static + Component>() -> i32 {
@@ -58,18 +47,24 @@ pub fn run<C: 'static + Component>() -> i32 {
     app.register(None as Option<&Cancellable>)
         .expect("unable to register Application");
 
+    let const_app = app.clone();
+
     let constructor = once(move |_| {
         let (channel, task) = partial_task.finalise();
         MainContext::ref_thread_default().spawn_local(task);
         channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+        const_app.connect_shutdown(move |_| {
+            channel.unbounded_send(ComponentMessage::Unmounted).unwrap();
+        });
     });
 
     app.connect_activate(move |_| {
         debug!("Application has activated.");
         constructor(());
     });
-    app.activate();
-    run_main_loop()
+
+    let args: Vec<String> = std::env::args().collect();
+    app.run(&args)
 }
 
 /// Launch a modal `Dialog`. The parent window will be blocked until it
@@ -80,6 +75,7 @@ pub fn run_dialog<C: 'static + Component>(
     let (channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
     let dialog: Dialog = task
         .object()
+        .unwrap()
         .downcast()
         .expect("Dialog must be a gtk::Dialog");
     if let Some(parent) = parent {
@@ -87,20 +83,14 @@ pub fn run_dialog<C: 'static + Component>(
     }
     MainContext::ref_thread_default().spawn_local(task);
     let (notify, result) = oneshot::channel();
-    dialog.connect_map(move |_| channel.unbounded_send(ComponentMessage::Mounted).unwrap());
-    let inner_dialog = dialog.clone();
-    let mount = once(move |response| if notify.send(response).is_err() {});
+    channel.unbounded_send(ComponentMessage::Mounted).unwrap();
+    let resolve = once(move |response| if notify.send(response).is_err() {});
     dialog.connect_response(move |_, response| {
-        mount(response);
-        inner_dialog.destroy();
+        resolve(response);
+        channel.unbounded_send(ComponentMessage::Unmounted).unwrap()
     });
     dialog.present();
     result
-}
-
-/// Run the Gtk main loop until termination.
-pub fn run_main_loop() -> i32 {
-    MAIN_LOOP.with(mainloop::MainLoop::run)
 }
 
 pub fn icon(name: &str, size: gtk::IconSize) -> gtk::Image {
@@ -120,4 +110,10 @@ fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
             panic!("vgtk::once() function called twice 😒");
         }
     }
+}
+
+pub fn quit() {
+    gio::Application::get_default()
+        .expect("no default Application!")
+        .quit();
 }

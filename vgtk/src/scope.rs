@@ -78,6 +78,10 @@ impl<C: 'static + Component> Scope<C> {
                 .expect("unable to send message to unbounded channel!")
         }
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 pub struct AnyScope {

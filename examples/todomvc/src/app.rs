@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use gio::{ActionExt, ApplicationFlags, SimpleAction};
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{ext::*, gtk, Component, VNode};
+use vgtk::{ext::*, gtk, Component, UpdateAction, VNode};
 
 use log::{debug, error};
 use strum_macros::{Display, EnumIter};
@@ -80,7 +80,7 @@ impl Component for Model {
     type Message = Msg;
     type Properties = ();
 
-    fn update(&mut self, msg: Self::Message) -> bool {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction {
         let left = self.filter(Filter::Active).count();
         match msg {
             Msg::Add { item } => {
@@ -111,7 +111,8 @@ impl Component for Model {
                 self.clean = false;
             }
             Msg::Exit => {
-                vgtk::main_quit(0);
+                vgtk::quit();
+                return UpdateAction::None;
             }
             Msg::MenuOpen => {
                 if open(self) {
@@ -137,9 +138,10 @@ impl Component for Model {
             }
             Msg::MenuAbout => {
                 AboutDialog::run();
+                return UpdateAction::None;
             }
         }
-        true
+        UpdateAction::Render
     }
 
     fn view(&self) -> VNode<Model> {

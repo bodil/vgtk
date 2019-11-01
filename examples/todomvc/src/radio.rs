@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{gtk, Callback, Component, VNode};
+use vgtk::{gtk, Callback, Component, UpdateAction, VNode};
 
 #[derive(Clone, Debug, Default)]
 pub struct Radio<Enum: Unpin> {
@@ -37,12 +37,12 @@ where
         props
     }
 
-    fn change(&mut self, props: Self::Properties) -> bool {
+    fn change(&mut self, props: Self::Properties) -> UpdateAction {
         *self = props;
-        true
+        UpdateAction::Render
     }
 
-    fn update(&mut self, msg: Self::Message) -> bool {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction {
         match msg {
             RadioMsg::Selected(selected) => {
                 self.active = selected;
@@ -51,7 +51,7 @@ where
                 }
             }
         }
-        true
+        UpdateAction::Render
     }
 
     fn view(&self) -> VNode<Radio<Enum>> {

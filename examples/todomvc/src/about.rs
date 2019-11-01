@@ -23,10 +23,6 @@ impl Component for AboutDialog {
     type Message = ();
     type Properties = ();
 
-    fn update(&mut self, _msg: Self::Message) -> bool {
-        false
-    }
-
     fn view(&self) -> VNode<Self> {
         gtk! {
             <Dialog::new_with_buttons(

@@ -1,6 +1,6 @@
 use gio::ApplicationFlags;
 use gtk::{prelude::*, Align, Application, Box, Button, HeaderBar, Label, Window};
-use vgtk::{ext::*, gtk, run, Component, VNode};
+use vgtk::{ext::*, gtk, run, Component, UpdateAction, VNode};
 
 #[derive(Clone, Debug, Default)]
 struct Model {
@@ -17,15 +17,15 @@ impl Component for Model {
     type Message = Message;
     type Properties = ();
 
-    fn update(&mut self, msg: Self::Message) -> bool {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction {
         match msg {
             Message::Inc => {
                 self.counter += 1;
-                true
+                UpdateAction::Render
             }
             Message::Exit => {
-                vgtk::main_quit(0);
-                false
+                vgtk::quit();
+                UpdateAction::None
             }
         }
     }

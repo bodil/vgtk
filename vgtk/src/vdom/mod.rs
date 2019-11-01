@@ -18,7 +18,11 @@ pub enum State<Model: Component> {
 
 impl<Model: 'static + Component> State<Model> {
     /// Build a full state from a `VItem` spec.
-    pub fn build(vnode: &VNode<Model>, parent: Option<&Object>, scope: &Scope<Model>) -> Self {
+    pub(crate) fn build(
+        vnode: &VNode<Model>,
+        parent: Option<&Object>,
+        scope: &Scope<Model>,
+    ) -> Self {
         match vnode {
             VNode::Object(object) => State::Gtk(GtkState::build(object, parent, scope)),
             VNode::Component(vcomp) => {
@@ -58,7 +62,7 @@ impl<Model: 'static + Component> State<Model> {
     ///
     /// Returns true if patching succeeded, or false if a rebuild is required.
     #[must_use]
-    pub fn patch(
+    pub(crate) fn patch(
         &mut self,
         vnode: &VNode<Model>,
         parent: Option<&Object>,
@@ -73,6 +77,13 @@ impl<Model: 'static + Component> State<Model> {
                 State::Component(state) => state.patch(vcomp, parent, scope),
                 State::Gtk(_) => false,
             },
+        }
+    }
+
+    pub(crate) fn unmount(self) {
+        match self {
+            State::Gtk(state) => state.unmount(),
+            State::Component(state) => state.unmount(),
         }
     }
 

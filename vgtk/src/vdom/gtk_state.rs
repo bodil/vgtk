@@ -268,13 +268,17 @@ impl<Model: 'static + Component> GtkState<Model> {
         }
     }
 
-    pub fn build(vobj: &VObject<Model>, parent: Option<&Object>, scope: &Scope<Model>) -> Self {
+    pub(crate) fn build(
+        vobj: &VObject<Model>,
+        parent: Option<&Object>,
+        scope: &Scope<Model>,
+    ) -> Self {
         let mut state = Self::build_root(vobj, parent, scope);
         state.build_children(vobj, scope);
         state
     }
 
-    pub fn patch(
+    pub(crate) fn patch(
         &mut self,
         vobj: &VObject<Model>,
         parent: Option<&Object>,
@@ -349,6 +353,7 @@ impl<Model: 'static + Component> GtkState<Model> {
             }
             for child in self.children.drain(index..) {
                 remove_child(&self.object, child.object());
+                child.unmount();
             }
             // Rebuild children from new specs
             for (index, child_spec) in vobj.children.iter().enumerate().skip(index) {
@@ -373,6 +378,7 @@ impl<Model: 'static + Component> GtkState<Model> {
                 }
                 for child in self.children.drain(remove_from..) {
                     remove_child(&self.object, &child.object());
+                    child.unmount();
                 }
             }
             // Or append newly constructed children
@@ -425,6 +431,15 @@ impl<Model: 'static + Component> GtkState<Model> {
         for key in remove {
             let obj: &Object = self.object.upcast_ref();
             obj.disconnect(self.handlers.remove(&key).unwrap());
+        }
+    }
+
+    pub(crate) fn unmount(self) {
+        for child in self.children {
+            child.unmount();
+        }
+        if let Ok(widget) = self.object.downcast::<Widget>() {
+            widget.destroy();
         }
     }
 }
