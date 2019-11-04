@@ -93,10 +93,6 @@ pub fn run_dialog<C: 'static + Component>(
     result
 }
 
-pub fn icon(name: &str, size: gtk::IconSize) -> gtk::Image {
-    gtk::Image::new_from_icon_name(Some(name), size)
-}
-
 /// Turn an `FnOnce(A)` into an `Fn(A)` that will panic if you call it twice.
 fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
     use std::cell::Cell;
