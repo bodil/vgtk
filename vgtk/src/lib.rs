@@ -22,6 +22,7 @@ use glib::MainContext;
 use gtk::prelude::*;
 use gtk::{Application, Dialog, ResponseType, Window};
 
+use colored::Colorize;
 use log::debug;
 
 use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
@@ -58,7 +59,7 @@ pub fn run<C: 'static + Component>() -> i32 {
     });
 
     app.connect_activate(move |_| {
-        debug!("Application has activated.");
+        debug!("{}", "Application has activated.".bright_blue());
         constructor(());
     });
 

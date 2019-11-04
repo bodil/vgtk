@@ -12,6 +12,7 @@ use std::fmt::{Debug, Error, Formatter};
 use std::pin::Pin;
 use std::sync::RwLock;
 
+use colored::Colorize;
 use log::{debug, trace};
 
 use crate::scope::{AnyScope, Scope};
@@ -65,14 +66,18 @@ pub(crate) enum ComponentMessage<C: Component> {
 impl<C: Component> Debug for ComponentMessage<C> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
-            ComponentMessage::Update(msg) => {
-                write!(f, "ComponentMessage::Update(")?;
-                msg.fmt(f)?;
-                write!(f, ")")
-            }
-            ComponentMessage::Props(_) => write!(f, "ComponentMessage::Props(...)"),
-            ComponentMessage::Mounted => write!(f, "ComponentMessage::Mounted"),
-            ComponentMessage::Unmounted => write!(f, "ComponentMessage::Unmounted"),
+            ComponentMessage::Update(msg) => write!(
+                f,
+                "{}",
+                format!(
+                    "ComponentMessage::Update({})",
+                    format!("{:?}", msg).bright_white().bold()
+                )
+                .green()
+            ),
+            ComponentMessage::Props(_) => write!(f, "{}", "ComponentMessage::Props(...)".green()),
+            ComponentMessage::Mounted => write!(f, "{}", "ComponentMessage::Mounted".green()),
+            ComponentMessage::Unmounted => write!(f, "{}", "ComponentMessage::Unmounted".green()),
         }
     }
 }
@@ -191,7 +196,11 @@ where
         let mut render = false;
         loop {
             let next = Stream::poll_next(self.channel.as_mut(), ctx);
-            trace!("{}: {:?}", self.scope.name(), next);
+            trace!(
+                "{} {}",
+                self.scope.name().bright_black(),
+                format!("{:?}", next).bright_black().bold()
+            );
             match next {
                 Poll::Ready(Some(msg)) => match msg {
                     ComponentMessage::Update(msg) => {
@@ -205,7 +214,11 @@ where
                         }
                     }
                     ComponentMessage::Mounted => {
-                        debug!("Component mounted: {}", self.scope.name());
+                        debug!(
+                            "{} {}",
+                            "Component mounted:".bright_blue(),
+                            self.scope.name().magenta().bold()
+                        );
                         self.state.mounted();
                     }
                     ComponentMessage::Unmounted => {
@@ -213,7 +226,11 @@ where
                             state.unmount();
                         }
                         self.state.unmounted();
-                        debug!("Component unmounted: {}", self.scope.name());
+                        debug!(
+                            "{} {}",
+                            "Component unmounted:".bright_red(),
+                            self.scope.name().magenta().bold()
+                        );
                         return Poll::Ready(());
                     }
                 },
@@ -222,9 +239,7 @@ where
                         // we patch
                         let new_view = self.state.view();
                         self.scope.mute();
-                        trace!("{}: patching", self.scope.name());
                         if !ui_state.patch(&new_view, None, &self.scope) {
-                            trace!("{}: patch failed!", self.scope.name());
                             unimplemented!(
                                 "{}: don't know how to propagate failed patch",
                                 self.scope.name()
@@ -234,16 +249,18 @@ where
                         return Poll::Pending;
                     } else {
                         debug!(
-                            "component {} rendering in the absence of a UI state; exiting",
-                            self.scope.name()
+                            "{} {}",
+                            self.scope.name().magenta().bold(),
+                            "rendering in the absence of a UI state; exiting".bright_red()
                         );
                         return Poll::Ready(());
                     }
                 }
                 Poll::Ready(None) => {
                     debug!(
-                        "Component {} terminating because all channel handles dropped",
-                        self.scope.name()
+                        "{} {}",
+                        self.scope.name().magenta().bold(),
+                        "terminating because all channel handles dropped".bright_red()
                     );
                     return Poll::Ready(());
                 }

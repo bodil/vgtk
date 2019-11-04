@@ -4,6 +4,7 @@ use std::sync::{
     Arc,
 };
 
+use colored::Colorize;
 use log::debug;
 
 use glib::futures::channel::mpsc::UnboundedSender;
@@ -67,10 +68,14 @@ impl<C: 'static + Component> Scope<C> {
 
     pub fn send_message(&self, msg: C::Message) {
         debug!(
-            "Scope::send_message{} {}: {:?}",
-            if self.is_muted() { " [muted]" } else { "" },
-            self.name,
-            msg
+            "{} {}: {}",
+            format!(
+                "Scope::send_message{}",
+                if self.is_muted() { " [muted]" } else { "" }
+            )
+            .green(),
+            self.name.magenta().bold(),
+            format!("{:?}", msg).bright_white().bold()
         );
         if !self.is_muted() {
             self.channel

@@ -6,7 +6,8 @@ use gtk::{
     Window, WindowPosition, WindowType,
 };
 
-use log::debug;
+use colored::Colorize;
+use log::trace;
 
 pub trait ApplicationHelpers: GtkApplicationExt {
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
@@ -76,7 +77,12 @@ pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Wi
             id.set(Some(self.connect_property_application_notify(
                 move |window: &Self| {
                     if let Some(app) = window.get_application() {
-                        debug!("Action: {:?} -> {:?}", name, accels);
+                        trace!(
+                            "{} {} -> {}",
+                            "Action:".bright_black(),
+                            name.bright_cyan().bold(),
+                            format!("{:?}", accels).bright_green().bold()
+                        );
                         app.set_accels_for_action(&name, accels);
                         window.disconnect(inner_id.replace(None).unwrap());
                     }
