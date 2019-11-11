@@ -31,9 +31,9 @@ impl Component for AboutDialog {
                 DialogFlags::MODAL,
                 &[("Ok", ResponseType::Ok)]
             )>
-                <Box spacing=10 orientation={Orientation::Vertical}>
-                    <Image pixbuf={Some(self.dog.clone())}/>
-                    <Label justify={Justification::Center} markup="<big><b>VGTK TodoMVC</b></big>\norg-mode for dummies!"/>
+                <Box spacing=10 orientation=Orientation::Vertical>
+                    <Image pixbuf=Some(self.dog.clone())/>
+                    <Label justify=Justification::Center markup="<big><b>VGTK TodoMVC</b></big>\norg-mode for dummies!"/>
                     <Label markup="<a href=\"https://github.com/bodil/vgtk\">https://github.com/bodil/vgtk</a>"/>
                 </Box>
             </Dialog>

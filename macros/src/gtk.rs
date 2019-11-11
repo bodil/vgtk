@@ -1,5 +1,5 @@
 use proc_macro2::{Group, Ident, Literal, TokenStream};
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 use crate::context::{Attribute, GtkComponent, GtkElement, GtkWidget};
 use crate::lexer::{to_stream, Token};
@@ -83,7 +83,7 @@ fn is_block(gtk: &GtkElement) -> Option<&Group> {
 }
 
 pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
-    let name = &gtk.name;
+    let name = to_stream(&gtk.name);
     let (prop_count, child_prop_count, handler_count) = count_attributes(&gtk.attributes);
     let mut out = quote!(
         use vgtk::{VNode, VHandler, VProperty, VObject, VComponent};
@@ -96,8 +96,8 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
         let mut handlers = Vec::with_capacity(#handler_count);
         let mut children = Vec::new();
     );
-    if let Some(ref cons) = gtk.constructor {
-        let cons = to_stream(cons.iter());
+    if !gtk.constructor.is_empty() {
+        let cons = to_stream(&gtk.constructor);
         out.extend(quote!(
             let constructor: Option<std::boxed::Box<dyn Fn() -> glib::Object>> = Some(std::boxed::Box::new(move || {
                 glib::object::Cast::upcast::<glib::Object>(#name#cons)
@@ -161,7 +161,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
 }
 
 pub fn expand_property(
-    object_type: Option<&Ident>,
+    object_type: Option<&[Token]>,
     child_prop: bool,
     parent: &[Token],
     name: &Ident,
@@ -169,7 +169,7 @@ pub fn expand_property(
 ) -> TokenStream {
     let child_prefix = if child_prop { "child_" } else { "" };
     let mut parent_type: Vec<Token> = parent.to_vec();
-    while let Some(Token::Punct(_, _)) = parent_type.last() {
+    while let Some(Token::Punct2(_, _, _, _)) = parent_type.last() {
         parent_type.pop();
     }
     let parent_type = to_stream(parent_type.iter());
@@ -181,9 +181,12 @@ pub fn expand_property(
         &format!("set_{}{}", child_prefix, name.to_string()),
         name.span(),
     );
+    let value_span = value[0].span();
     let value = to_stream(value);
+    let value = quote_spanned!(value_span => (#value).into_property_value());
     let prop_name = to_string_literal(name);
     let setter_prelude = if let Some(object_type) = object_type {
+        let object_type = to_stream(object_type);
         quote!(
             let object: &#object_type = object.downcast_ref()
                   .unwrap_or_else(|| panic!("downcast to {:?} failed in property setter", #object_type::static_type()));
@@ -221,7 +224,7 @@ pub fn expand_property(
             use vgtk::properties::{
                 IntoPropertyValue, PropertyValue, PropertyValueCoerce, PropertyValueCompare,
             };
-            let value = #value.into_property_value();
+            let value = #value;
             VProperty {
                 name: #prop_name,
                 set: std::boxed::Box::new(move |object: &glib::Object, parent: Option<&glib::Object>, force: bool| {
@@ -234,12 +237,13 @@ pub fn expand_property(
 }
 
 pub fn expand_handler(
-    object_type: &Ident,
+    object_type: &[Token],
     name: &Ident,
     async_keyword: Option<&Token>,
     args: &[Token],
     body: &[Token],
 ) -> TokenStream {
+    let object_type = to_stream(object_type);
     let args_s = to_stream(args);
     let body_s = to_stream(body);
     let connect = Ident::new(&format!("connect_{}", name.to_string()), name.span());
@@ -269,7 +273,7 @@ pub fn expand_handler(
                 let object: &#object_type = object.downcast_ref()
                       .unwrap_or_else(|| panic!("downcast to {:?} failed in signal setter", #object_type::static_type()));
                 let scope: Scope<_> = scope.clone();
-                object.#connect(move | #args_s | #inner_block)
+                object.#connect(move #args_s #inner_block)
             })
         });
     )

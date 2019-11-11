@@ -1,0 +1,292 @@
+use crate::lexer::{self, Token, Tokens};
+use crate::error::RsxParseError;
+use crate::context::{Attribute, GtkComponent, GtkElement, GtkWidget};
+use proc_macro2::{Ident, Literal, Group};
+use lalrpop_util::ParseError;
+use std::iter::once;
+
+grammar;
+
+extern {
+    type Location = usize;
+    type Error = RsxParseError;
+
+    enum lexer::Token {
+        "<" => Token::Punct1('<', _),
+        ">" => Token::Punct1('>', _),
+        "/" => Token::Punct1('/', _),
+        "=" => Token::Punct1('=', _),
+        "-" => Token::Punct1('-', _),
+        ":" => Token::Punct1(':', _),
+        "." => Token::Punct1('.', _),
+        "," => Token::Punct1(',', _),
+        "&" => Token::Punct1('&', _),
+        "'" => Token::Punct1('\'', _),
+        ";" => Token::Punct1(';', _),
+        "@" => Token::Punct1('@', _),
+        "|" => Token::Punct1('|', _),
+        "+" => Token::Punct1('+', _),
+        "*" => Token::Punct1('*', _),
+        "!" => Token::Punct1('!', _),
+        "on" => Token::Keyword(lexer::Keyword::On, _),
+        "async" => Token::Keyword(lexer::Keyword::Async, _),
+        "==" => Token::Punct2('=', '=', _, _),
+        "!=" => Token::Punct2('!', '=', _, _),
+        "<=" => Token::Punct2('<', '=', _, _),
+        ">=" => Token::Punct2('>', '=', _, _),
+        "<<" => Token::Punct2('<', '<', _, _),
+        ">>" => Token::Punct2('>', '>', _, _),
+        "&&" => Token::Punct2('&', '&', _, _),
+        "||" => Token::Punct2('|', '|', _, _),
+        "->" => Token::Punct2('-', '>', _, _),
+        "::" => Token::Punct2(':', ':', _, _),
+        "</" => Token::Punct2('<', '/', _, _),
+        "/>" => Token::Punct2('/', '>', _, _),
+        "<@" => Token::Punct2('<', '@', _, _),
+        IdentToken => Token::Ident(_),
+        LiteralToken => Token::Literal(_),
+        ParenGroupToken => Token::Group(proc_macro2::Delimiter::Parenthesis, _),
+        BraceGroupToken => Token::Group(proc_macro2::Delimiter::Brace, _),
+        BracketGroupToken => Token::Group(proc_macro2::Delimiter::Bracket, _),
+    }
+}
+
+/// Match a B separated list of one or more A, return a list of tokens, including the Bs.
+/// A must resolve to Tokens and B must resolve to a Token.
+Separated<A, B>: Tokens = {
+    <v:(A B)*> <e:A> => {
+        v.into_iter().flat_map(|(a, b)| a.into_iter().chain(once(b))).chain(e.into_iter()).collect()
+    }
+}
+
+Ident: Ident = IdentToken => {
+    match <> {
+        Token::Ident(ident) => ident,
+        _ => unreachable!()
+    }
+};
+
+Literal: Literal = LiteralToken => {
+    match <> {
+        Token::Literal(literal) => literal,
+        _ => unreachable!()
+    }
+};
+
+GroupToken = {
+    BraceGroupToken,
+    BracketGroupToken,
+    ParenGroupToken,
+};
+
+BraceGroup: Group = BraceGroupToken => {
+    match <> {
+        Token::Group(_, group) => group,
+        _ => unreachable!()
+    }
+};
+
+// Parsers for building a Rust type signature.
+TypePath: Tokens = {
+    IdentToken => <>.into(),
+    <path:TypePath> <sep:"::"> <last:IdentToken> => path + sep + last,
+};
+
+Reference: Tokens = "&" ("'" IdentToken)? => {
+    let (amp, lifetime) = (<>);
+    if let Some((tick, ident)) = lifetime {
+        amp + tick + ident
+    } else {
+        amp.into()
+    }
+};
+
+TypeArgs: Tokens = {
+    TypeSpec,
+    <args:TypeArgs> <comma:","> <last:TypeSpec> => args + comma + last,
+};
+
+TypeArgList: Tokens = <left:"<"> <args:TypeArgs> <right:">"> => left + args + right;
+
+FnReturnType: Tokens = <arrow:"->"> <spec:TypeSpec> => arrow + spec;
+
+FnArgList: Tokens = <args:ParenGroupToken> <rt:FnReturnType?> => args + rt;
+
+TypeArgSpec = {
+    TypeArgList,
+    FnArgList,
+};
+
+TypeSpec: Tokens = Reference? TypePath TypeArgSpec? => {
+    let (reference, path, args) = (<>);
+    Tokens::new() + reference + path + args
+};
+
+TypeSignature: Tokens = Reference? TypePath TypeArgList? => {
+    let (reference, path, args) = (<>);
+    Tokens::new() + reference + path + args
+};
+
+// This includes struct constructors (both parens and braces) and, erroneously,
+// brackets, but rustc will catch that.
+FunctionApplication: Tokens = <expr:DottableExpr> <args:GroupToken> => expr + args;
+
+DotInvocation: Tokens = <dot:"."> <method:IdentToken> <args:ParenGroupToken?> => dot + method + args;
+
+DotExpr: Tokens = <expr:DottableExpr> <dots:DotInvocation+> => expr + dots;
+
+// A single Rust argument declaration.
+FunctionArg: Tokens = <name:Ident> <signature:(":" TypeSignature)?> => {
+    let name: Token = name.into();
+    if let Some((colon, signature)) = signature {
+        name + colon + signature
+    } else {
+        name.into()
+    }
+};
+
+ClosureArgs: Tokens = "|" Separated<FunctionArg, ","> "|" => {
+    let (left_bar, args, right_bar) = (<>);
+    left_bar + args + right_bar
+};
+
+// A Rust closure declaration.
+Closure: Tokens = <args:ClosureArgs> <body:RustExpr> => args + body;
+
+BinaryOperator: Token = {
+    "+",
+    "-",
+    "*",
+    "|",
+    "&",
+    "<",
+    "||",
+    "&&",
+    "<<",
+    ">>",
+    "==",
+    "!=",
+    "<=",
+    ">=",
+};
+
+Macro: Tokens = Ident "!" GroupToken => {
+    let (name, bang, args) = (<>);
+    let name: Token = name.into();
+    name + bang + args
+};
+
+ReferenceExpr: Tokens = <amp:"&"> <expr:NonBinaryExpr> => amp + expr;
+
+NotExpr: Tokens = <bang:"!"> <expr:NonBinaryExpr> => bang + expr;
+
+// Expressions which can be followed by a property/method call.
+DottableExpr: Tokens = {
+    LiteralToken => <>.into(),
+    GroupToken => <>.into(),
+    FunctionApplication,
+    TypePath,
+};
+
+// Expressions which can appear on the LHS of a binary operator.
+NonBinaryExpr: Tokens = {
+    ReferenceExpr,
+    NotExpr,
+    DotExpr,
+    DottableExpr,
+    Macro,
+};
+
+// An attempt to parse a single Rust expression.
+RustExpr = {
+    NonBinaryExpr,
+    <left:NonBinaryExpr> <op:BinaryOperator> <right:RustExpr> => left + op + right,
+    Closure,
+};
+
+Property: Attribute = <child_qual:"@"?> <path:(Ident "::")*> <name:Ident> "=" <value:RustExpr> => {
+    let child = child_qual.is_none() && !path.is_empty();
+    let parent = path.into_iter().flat_map(|(name, sep)| once(name.into()).chain(once(sep))).collect();
+    Attribute::Property {
+        child, parent, name, value
+    }
+};
+
+Handler: Attribute = "on" <name:Ident> "=" <async_keyword:"async"?> <args:ClosureArgs> <body:RustExpr> => {
+    Attribute::Handler {
+        name, async_keyword, args, body
+    }
+};
+
+Attr = {
+    Handler,
+    Property,
+};
+
+SingleCloser: () = {
+    "/>",
+    "/" ">",
+};
+
+ParentCloser: () = {
+    "</",
+    "<" "/",
+};
+
+WidgetName: (Tokens, Tokens) = <mut name:TypeSignature> <cons:ParenGroupToken?> =>? {
+    if let Some(cons_args) = cons {
+        if name.len() < 3 {
+            return Err(ParseError::User { error: RsxParseError::UnexpectedConstructor {
+                name,
+                args: cons_args,
+            } });
+        }
+        let cons_out = name.split_off(name.len() - 2);
+        Ok((name, cons_out + cons_args))
+    } else {
+        Ok((name, Tokens::new()))
+    }
+};
+
+WidgetPrelude: GtkWidget = "<" <name:WidgetName> <attributes:Attr*> => {
+    let (name, constructor) = name;
+    GtkWidget {
+        name, constructor, attributes, children: Vec::new()
+    }
+};
+
+ClosingTag: Tokens = ParentCloser <TypeSignature> ">";
+
+SingleWidget: GtkElement = <WidgetPrelude> SingleCloser => {
+    GtkElement::Widget(<>)
+};
+
+ParentWidget: GtkElement = <mut widget:WidgetPrelude> ">" <children:GtkElement*> <closing:ClosingTag> =>? {
+    widget.children = children;
+    if closing.iter().map(ToString::to_string).eq(widget.name.iter().map(ToString::to_string)) {
+        Ok(GtkElement::Widget(widget))
+    } else {
+        Err(ParseError::User { error: RsxParseError::TagMismatch {
+            open: widget.name,
+            close: closing,
+        } })
+    }
+};
+
+ComponentOpener: () = {
+    "<@",
+    "<" "@",
+};
+
+Component: GtkElement = ComponentOpener <name:TypeSignature> <attributes:Attr*> SingleCloser => {
+    GtkElement::Component(GtkComponent {
+        name, attributes
+    })
+};
+
+pub GtkElement: GtkElement = {
+    BraceGroup => GtkElement::Block(<>),
+    Component,
+    SingleWidget,
+    ParentWidget,
+};

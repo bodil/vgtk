@@ -172,29 +172,29 @@ impl Component for Model {
         gtk! {
             <Application::new_unwrap(Some("camp.lol.todomvc"), ApplicationFlags::empty())>
 
-                <SimpleAction::new("quit", None) Application::accels={["<Ctrl>q"].as_ref()} enabled=true
-                        on activate=|a, _| {Msg::Exit}/>
-                <SimpleAction::new("about", None) enabled=true on activate=|_, _| {Msg::MenuAbout}/>
+                <SimpleAction::new("quit", None) Application::accels=["<Ctrl>q"].as_ref() enabled=true
+                        on activate=|a, _| Msg::Exit/>
+                <SimpleAction::new("about", None) enabled=true on activate=|_, _| Msg::MenuAbout/>
 
-                <ApplicationWindow default_width=800 default_height=480 border_width=20u32 on destroy=|_| {Msg::Exit}>
+                <ApplicationWindow default_width=800 default_height=480 border_width=20u32 on destroy=|_| Msg::Exit>
 
-                    <SimpleAction::new("open", None) ApplicationWindow::accels={["<Ctrl>o"].as_ref()}
-                                                     enabled=true on activate=|a, _| {Msg::MenuOpen}/>
-                    <SimpleAction::new("save", None) ApplicationWindow::accels={["<Ctrl>s"].as_ref()}
-                                                     enabled={self.items.has_path() && !self.clean} on activate=|_, _| {Msg::MenuSave}/>
-                    <SimpleAction::new("save-as", None) ApplicationWindow::accels={["<Ctrl><Shift>s"].as_ref()}
-                                                        enabled=true on activate=|_, _| {Msg::MenuSaveAs}/>
+                    <SimpleAction::new("open", None) ApplicationWindow::accels=["<Ctrl>o"].as_ref()
+                                                     enabled=true on activate=|a, _| Msg::MenuOpen/>
+                    <SimpleAction::new("save", None) ApplicationWindow::accels=["<Ctrl>s"].as_ref()
+                                                     enabled=self.items.has_path() && !self.clean on activate=|_, _| Msg::MenuSave/>
+                    <SimpleAction::new("save-as", None) ApplicationWindow::accels=["<Ctrl><Shift>s"].as_ref()
+                                                        enabled=true on activate=|_, _| Msg::MenuSaveAs/>
 
-                    <HeaderBar title={format!("TodoMVC - {}{}", title, clean)} subtitle="wtf do we do now" show_close_button=true>
-                        <MenuButton HeaderBar::pack_type={PackType::End} @MenuButtonExt::direction={ArrowType::Down}
+                    <HeaderBar title=format!("TodoMVC - {}{}", title, clean) subtitle="wtf do we do now" show_close_button=true>
+                        <MenuButton HeaderBar::pack_type=PackType::End @MenuButtonExt::direction=ArrowType::Down
                                     image="open-menu-symbolic">
                             <Menu::new_from_model(&main_menu)/>
                         </MenuButton>
                     </HeaderBar>
-                    <Box spacing=10 orientation={Orientation::Vertical}>
-                        <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
-                            <Button image="edit-select-all" relief={ReliefStyle::Half}
-                                    always_show_image=true on clicked=|_| {Msg::ToggleAll}/>
+                    <Box spacing=10 orientation=Orientation::Vertical>
+                        <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
+                            <Button image="edit-select-all" relief=ReliefStyle::Half
+                                    always_show_image=true on clicked=|_| Msg::ToggleAll/>
                             <Entry placeholder_text="What needs to be done?"
                                    Box::expand=true Box::fill=true
                                    on activate=|entry| {
@@ -206,21 +206,21 @@ impl Component for Model {
                                    } />
                         </Box>
                         <ScrolledWindow Box::expand=true Box::fill=true>
-                            <ListBox selection_mode={SelectionMode::None}>
+                            <ListBox selection_mode=SelectionMode::None>
                                 {
                                     self.filter(self.filter).enumerate()
                                         .map(|(index, item)| item.render(index))
                                 }
                             </ListBox>
                         </ScrolledWindow>
-                        <Box spacing=10 orientation={Orientation::Horizontal} Box::expand=false>
-                            <Label label={self.left_label()}/>
-                            <@Radio<Filter> active={self.filter} Box::center_widget=true on_changed={|filter| Msg::Filter { filter }} />
+                        <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
+                            <Label label=self.left_label()/>
+                            <@Radio<Filter> active=self.filter Box::center_widget=true on_changed=|filter| Msg::Filter { filter } />
                             {
                                 if self.filter(Filter::Completed).count() > 0 {
                                     (gtk!{
-                                         <Button label="Clear completed" Box::pack_type={PackType::End}
-                                                 on clicked=|_| {Msg::ClearCompleted}/>
+                                         <Button label="Clear completed" Box::pack_type=PackType::End
+                                                 on clicked=|_| Msg::ClearCompleted/>
                                     }).into_iter()
                                 } else {
                                     VNode::empty()

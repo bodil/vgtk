@@ -37,12 +37,12 @@ impl Item {
         };
         gtk! {
             <ListBoxRow>
-                <Box spacing=10 orientation={Orientation::Horizontal}>
-                    <CheckButton active={self.done} on toggled=|_| {Msg::Toggle { index }} />
+                <Box spacing=10 orientation=Orientation::Horizontal>
+                    <CheckButton active=self.done on toggled=|_| Msg::Toggle { index } />
                     <Label label=label use_markup=true Box::fill=true />
-                    <Button Box::pack_type={PackType::End} relief={ReliefStyle::None}
+                    <Button Box::pack_type=PackType::End relief=ReliefStyle::None
                             always_show_image=true image="edit-delete"
-                            on clicked=|_| {Msg::Remove { index }} />
+                            on clicked=|_| Msg::Remove { index } />
                 </Box>
             </ListBoxRow>
         }

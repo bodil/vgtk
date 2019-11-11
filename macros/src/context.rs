@@ -2,19 +2,19 @@ use std::fmt::{Debug, Error, Formatter};
 
 use proc_macro2::{Group, Ident};
 
-use crate::lexer::Token;
+use crate::lexer::{Token, Tokens};
 
 #[derive(Debug, Clone)]
 pub struct GtkWidget {
-    pub name: Ident,
-    pub constructor: Option<Vec<Token>>,
+    pub name: Tokens,
+    pub constructor: Tokens,
     pub attributes: Vec<Attribute>,
     pub children: Vec<GtkElement>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GtkComponent {
-    pub name: Vec<Token>,
+    pub name: Tokens,
     pub attributes: Vec<Attribute>,
 }
 
@@ -29,15 +29,15 @@ pub enum GtkElement {
 pub enum Attribute {
     Property {
         child: bool,
-        parent: Vec<Token>,
+        parent: Tokens,
         name: Ident,
-        value: Vec<Token>,
+        value: Tokens,
     },
     Handler {
         name: Ident,
         async_keyword: Option<Token>,
-        args: Vec<Token>,
-        body: Vec<Token>,
+        args: Tokens,
+        body: Tokens,
     },
 }
 

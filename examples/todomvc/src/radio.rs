@@ -56,11 +56,11 @@ where
 
     fn view(&self) -> VNode<Radio<Enum>> {
         gtk! {
-            <Box orientation={Orientation::Horizontal} spacing=10>
+            <Box orientation=Orientation::Horizontal spacing=10>
                 { Enum::iter().map(|label| {
                     gtk!{
-                        <ToggleButton label={label.to_string()} active={label == self.active}
-                                      on toggled=|_| {RadioMsg::Selected(label)}/>
+                        <ToggleButton label=label.to_string() active=label == self.active
+                                      on toggled=|_| RadioMsg::Selected(label)/>
                     }
                 }) }
             </Box>
