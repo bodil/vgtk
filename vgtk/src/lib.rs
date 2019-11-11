@@ -13,14 +13,13 @@ pub use vgtk_macros::gtk;
 
 use gio::prelude::*;
 use gio::Cancellable;
-use glib::futures::{
-    channel::oneshot::{self, Canceled},
-    Future,
-};
 use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
 use gtk::{Application, Dialog, ResponseType, Window};
+
+use futures::channel::oneshot::{self, Canceled};
+use std::future::Future;
 
 use colored::Colorize;
 use log::debug;

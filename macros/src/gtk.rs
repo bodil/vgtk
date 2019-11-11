@@ -252,11 +252,12 @@ pub fn expand_handler(
     let signal_id = to_string_literal(format!("{:?}", location));
     let inner_block = if async_keyword.is_some() {
         quote!({
-            use futures::future::{ok, FutureExt};
             let scope = scope.clone();
-            let send = move |msg| scope.send_message(msg);
             glib::MainContext::ref_thread_default().spawn_local(
-                async move { #body_s }.map(send)
+                async move {
+                    let msg = async move { #body_s }.await;
+                    scope.send_message(msg);
+                }
             )
         })
     } else {
