@@ -14,7 +14,6 @@ use crate::items::{Item, Items};
 use crate::radio::Radio;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Display, EnumIter)]
-#[repr(u32)]
 pub enum Filter {
     All,
     Active,

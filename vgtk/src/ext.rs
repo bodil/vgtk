@@ -1,4 +1,4 @@
-//! Helper traits for adapting the Gtk API to the `gtk!` macro's mindset.
+//! Helper traits for adapting the GTK API to the `gtk!` macro's mindset.
 //!
 //! It is generally a good idea to `use vgtk::ext::*;` wherever you're using the
 //! `gtk!` macro.

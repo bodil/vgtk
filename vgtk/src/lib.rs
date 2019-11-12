@@ -1,3 +1,63 @@
+//! A declarative UI framework built on [GTK] and [Gtk-rs].
+//!
+//! ## Show Me!
+//!
+//! ```rust,no_run
+//! use vgtk::{ext::*, gtk, run, Component, UpdateAction, VNode};
+//! use vgtk::lib::{gtk::*, gio::ApplicationFlags};
+//!
+//! #[derive(Clone, Default, Debug)]
+//! struct Model {
+//!      counter: usize,
+//! }
+//!
+//! #[derive(Clone, Debug)]
+//! enum Message {
+//!     Inc,
+//!     Exit,
+//! }
+//!
+//! impl Component for Model {
+//!     type Message = Message;
+//!     type Properties = ();
+//!
+//!     fn update(&mut self, message: Message) -> UpdateAction<Self> {
+//!         match message {
+//!             Message::Inc => {
+//!                 self.counter += 1;
+//!                 UpdateAction::Render
+//!             }
+//!             Message::Exit => {
+//!                 vgtk::quit();
+//!                 UpdateAction::None
+//!             }
+//!         }
+//!     }
+//!
+//!     fn view(&self) -> VNode<Model> {
+//!         gtk! {
+//!             <Application::new_unwrap(None, ApplicationFlags::empty())>
+//!                 <Window border_width=20 on destroy=|_| Message::Exit>
+//!                     <HeaderBar title="inc!" show_close_button=true />
+//!                     <Box spacing=10 halign=Align::Center>
+//!                         <Label label=self.counter.to_string() />
+//!                         <Button label="inc!" image="add" always_show_image=true
+//!                                 on clicked=|_| Message::Inc />
+//!                     </Box>
+//!                 </Window>
+//!             </Application>
+//!         }
+//!     }
+//! }
+//!
+//! fn main() {
+//!     std::process::exit(run::<Model>());
+//! }
+//! ```
+//!
+//! [GTK]: https://www.gtk.org/
+//! [Gtk-rs]: https://gtk-rs.org/
+
 mod callback;
 mod component;
 pub mod ext;
@@ -37,16 +97,16 @@ pub use crate::component::{current_object, current_window, Component, UpdateActi
 pub use crate::menu_builder::{menu, MenuBuilder};
 pub use crate::vnode::VNode;
 
-/// Re-exports of Gtk and its associated libraries.
+/// Re-exports of GTK and its associated libraries.
 ///
 /// It is recommended that you use these rather than pulling them in as
 /// dependencies of your own project, to avoid versioning conflicts.
 pub mod lib {
-    pub use gdk;
-    pub use gdk_pixbuf;
-    pub use gio;
-    pub use glib;
-    pub use gtk;
+    pub use ::gdk;
+    pub use ::gdk_pixbuf;
+    pub use ::gio;
+    pub use ::glib;
+    pub use ::gtk;
 }
 
 /// Run an `Application` component until termination.
