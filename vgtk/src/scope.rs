@@ -89,7 +89,7 @@ impl<C: 'static + Component> Scope<C> {
     }
 }
 
-pub struct AnyScope {
+pub(crate) struct AnyScope {
     type_id: TypeId,
     ptr: AtomicPtr<()>,
     drop: Box<dyn Fn(&mut AtomicPtr<()>) + Send>,

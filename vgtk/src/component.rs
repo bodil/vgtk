@@ -21,38 +21,78 @@ use crate::scope::{AnyScope, Scope};
 use crate::vdom::State;
 use crate::vnode::VNode;
 
+/// An action resulting from a `Component::update()`.
 pub enum UpdateAction<C: Component> {
+    /// No action is necessary.
     None,
+    /// Re-render the widget tree.
     Render,
+    /// Run an async task and update again when it completes.
+    ///
+    /// You should use `UpdateAction::defer()` to construct this, rather than
+    /// trying to box up your `Future` yourself.
     Defer(Pin<Box<dyn Future<Output = C::Message> + 'static>>),
 }
 
 impl<C: Component> UpdateAction<C> {
+    /// Construct a deferred action given a `Future`.
     pub fn defer(job: impl Future<Output = C::Message> + 'static) -> Self {
         UpdateAction::Defer(job.boxed_local())
     }
 }
 
+/// This is the trait your UI components should implement.
 pub trait Component: Default + Unpin {
+    /// The type of messages you can send to the `Component::update()` function.
     type Message: Clone + Send + Debug + Unpin;
+    /// A struct type which holds the properties for your `Component`.
+    ///
+    /// The `gtk!` macro will construct this from the attributes on the
+    /// corresponding component element.
+    ///
+    /// This is not relevant and should be set to `()` if you're writing a top
+    /// level component.
     type Properties: Clone + Default;
 
+    /// Process a `Component::Message` and update the state accordingly.
+    ///
+    /// If you've made changes which should be reflected in the UI state, return
+    /// `UpdateAction::Render`. This will call `Component::view()` and update
+    /// the widget tree accordingly.
+    ///
+    /// If you need to perform I/O, you can return `UpdateAction::Defer`, which
+    /// will run an async action and call `Component::update()` again with its
+    /// result.
+    ///
+    /// Otherwise, return `UpdateAction::None`.
     fn update(&mut self, _msg: Self::Message) -> UpdateAction<Self> {
         UpdateAction::None
     }
 
+    /// Construct a new `Component` given a `Component::Properties` object.
+    ///
+    /// This will never be called to construct a top level component. These will
+    /// always be constructed using `Default::default()`.
     fn create(_props: Self::Properties) -> Self {
         Self::default()
     }
 
+    /// Update a `Component`'s properties.
     fn change(&mut self, _props: Self::Properties) -> UpdateAction<Self> {
         unimplemented!("add a Component::change() implementation")
     }
 
+    /// This method is called when the `Component` becomes visible to the user.
     fn mounted(&mut self) {}
 
+    /// This method is called when the `Component` becomes hidden or is
+    /// removed entirely.
     fn unmounted(&mut self) {}
 
+    /// Build a `VNode` tree to represent your UI.
+    ///
+    /// This is called whenever the `Component` needs to re-render, and its UI
+    /// state will be updated to reflect the `VNode` tree.
     fn view(&self) -> VNode<Self>;
 }
 
@@ -313,6 +353,13 @@ where
     }
 }
 
+/// Get the current `Object`.
+///
+/// When called from inside a `Component`, it will return the top level `Object`
+/// for this component, if it currently exists.
+///
+/// When called from outside a `Component`'s lifecycle, you should hopefully
+/// just receive a `None`, but, generally, try not to do that.
 pub fn current_object() -> Option<Object> {
     LOCAL_CONTEXT.with(|key| {
         let lock = key.read().unwrap();
@@ -322,6 +369,22 @@ pub fn current_object() -> Option<Object> {
     })
 }
 
+/// Get the current `Window`.
+///
+/// When called from inside a `Component`, it will return the `Window` to which
+/// its top level `Object` is attached.
+///
+/// If the top level `Object` is a `Window`, it will return that.
+///
+/// If the top level `Object` is an `Application`, it will return that
+/// `Application`'s idea of what its currently active `Window` is, as determined
+/// by `Application::get_active_window()`.
+///
+/// If it's unable to determine what the current `Window` is, you'll get a
+/// `None`.
+///
+/// When called from outside a `Component`'s lifecycle, you should hopefully
+/// just receive a `None`, but, generally, try not to do that.
 pub fn current_window() -> Option<Window> {
     current_object().and_then(|obj| match obj.downcast::<Window>() {
         Ok(window) => Some(window),

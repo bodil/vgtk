@@ -1,3 +1,8 @@
+//! Helper traits for adapting the Gtk API to the `gtk!` macro's mindset.
+//!
+//! It is generally a good idea to `use vgtk::ext::*;` wherever you're using the
+//! `gtk!` macro.
+
 use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};

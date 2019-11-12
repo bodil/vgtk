@@ -38,7 +38,7 @@ pub fn expand_gtk(gtk: &GtkElement) -> TokenStream {
 pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
     let name = to_stream(&gtk.name);
     let mut out = quote!(
-        use vgtk::{Component, VComponent, PropTransform};
+        use vgtk::{Component, vnode::VComponent, vnode::PropTransform};
         let mut vcomp = VComponent::new::<#name>();
         let mut props = <#name as Component>::Properties::default();
     );
@@ -86,8 +86,8 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     let name = to_stream(&gtk.name);
     let (prop_count, child_prop_count, handler_count) = count_attributes(&gtk.attributes);
     let mut out = quote!(
-        use vgtk::{VNode, VHandler, VProperty, VObject, VComponent};
-        use vgtk::Scope;
+        use vgtk::vnode::{VNode, VHandler, VProperty, VObject, VComponent};
+        use vgtk::scope::Scope;
         use vgtk::lib::glib::StaticType;
         use std::vec::Vec;
         let object_type = #name::static_type();

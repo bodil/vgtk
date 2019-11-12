@@ -1,3 +1,5 @@
+//! Property conversion traits.
+
 use std::marker::PhantomData;
 
 use glib::{Cast, GString};

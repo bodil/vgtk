@@ -1,6 +1,6 @@
 use glib::{signal::SignalHandlerId, Object};
 
-use crate::{Component, Scope};
+use crate::{scope::Scope, Component};
 
 pub struct VHandler<Model: Component> {
     pub name: &'static str,

@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Error, Formatter};
 use std::rc::Rc;
 
+/// A callback property for sub-`Component`s.
 pub struct Callback<A>(pub(crate) Rc<dyn Fn(A)>);
 
 impl<A: Debug> Callback<A> {

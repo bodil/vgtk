@@ -2,12 +2,17 @@ mod callback;
 mod component;
 pub mod ext;
 mod menu_builder;
+#[doc(hidden)]
 pub mod properties;
-mod scope;
+#[doc(hidden)]
+pub mod scope;
 mod vdom;
-mod vnode;
+#[doc(hidden)]
+pub mod vnode;
 
 use proc_macro_hack::proc_macro_hack;
+
+/// Generate a virtual component tree.
 #[proc_macro_hack(support_nested)]
 pub use vgtk_macros::gtk;
 
@@ -30,9 +35,12 @@ use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
 pub use crate::callback::Callback;
 pub use crate::component::{current_object, current_window, Component, UpdateAction};
 pub use crate::menu_builder::{menu, MenuBuilder};
-pub use crate::scope::Scope;
-pub use crate::vnode::{PropTransform, VComponent, VHandler, VNode, VObject, VProperty};
+pub use crate::vnode::VNode;
 
+/// Re-exports of Gtk and its associated libraries.
+///
+/// It is recommended that you use these rather than pulling them in as
+/// dependencies of your own project, to avoid versioning conflicts.
 pub mod lib {
     pub use gdk;
     pub use gdk_pixbuf;
@@ -42,6 +50,8 @@ pub mod lib {
 }
 
 /// Run an `Application` component until termination.
+///
+/// This is generally the function you'll call to get everything up and running.
 pub fn run<C: 'static + Component>() -> i32 {
     gtk::init().expect("GTK failed to initialise");
     let partial_task = PartialComponentTask::<C, ()>::new(Default::default(), None, None);
@@ -75,8 +85,13 @@ pub fn run<C: 'static + Component>() -> i32 {
     app.run(&args)
 }
 
-/// Launch a modal `Dialog`. The parent window will be blocked until it
-/// resolves.
+/// Launch a `Dialog` component as a modal dialog.
+///
+/// The parent window will be blocked until it resolves.
+///
+/// It returns a `Future` which resolves either to `Ok(ResponseType)` when the
+/// `response` signal is emitted, or to `Err(Canceled)` if the dialog is
+/// destroyed before the user responds to it.
 pub fn run_dialog<C: 'static + Component>(
     parent: Option<&Window>,
 ) -> impl Future<Output = Result<ResponseType, Canceled>> {
@@ -116,12 +131,27 @@ fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
     }
 }
 
+/// Tell the running `Application` to quit.
+///
+/// This calls `Application::quit()` on the current default `Application`. It
+/// will cause the `vgtk::run()` in charge of that `Application` to terminate.
 pub fn quit() {
     gio::Application::get_default()
         .expect("no default Application!")
         .quit();
 }
 
+/// Connect a GLib signal to a `Future`.
+///
+/// This macro takes a GLib object and the name of a method to connect it to a
+/// signal (generally of the form `connect_signal_name`), and generates an
+/// `async` block that will resolve with the emitted value the first time the
+/// signal is emitted.
+///
+/// The output type of the async block is `Result<T, Canceled>`, where `T` is
+/// the type of the emitted value (the second argument to the callback
+/// `connect_signal_name` takes). It will produce `Err(Canceled)` if the object
+/// is destroyed before the signal is emitted.
 #[macro_export]
 macro_rules! on_signal {
     ($object:expr, $connect:ident) => {
@@ -144,6 +174,32 @@ macro_rules! on_signal {
     };
 }
 
+/// Connect a GLib signal to a `Stream`.
+///
+/// This macro takes a GLib object and the name of a method to connect it to a
+/// signal (generally of the form `connect_signal_name`), and generates a
+/// `Stream` that will produce a value every time the signal is emitted.
+///
+/// The output type of the stream is the type of the emitted value (the second
+/// argument to the callback `connect_signal_name` takes). The stream will
+/// terminate when the object it's connected to is destroyed.
+#[macro_export]
+macro_rules! stream_signal {
+    ($object:expr, $connect:ident) => {{
+        let (input, output) = futures::channel::mpsc::unbounded();
+        $object.$connect(move |_, value| if input.unbounded_send(value).is_ok() {});
+        output
+    }};
+}
+
+/// Open a simple `MessageDialog`.
+///
+/// The arguments are passed directly to `MessageDialog::new()`. The `is_markup`
+/// flag, if set, will interpret the `message` as markup rather than plain text
+/// (see `MessageDialog::set_markup()`).
+///
+/// It returns a `Future` which will resolve to the `ResponseType` the user
+/// responds with.
 pub async fn message_dialog<W, S>(
     parent: Option<&W>,
     flags: DialogFlags,
