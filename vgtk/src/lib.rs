@@ -13,7 +13,6 @@ pub use vgtk_macros::gtk;
 
 use gio::prelude::*;
 use gio::Cancellable;
-use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
 use gtk::{
@@ -33,6 +32,14 @@ pub use crate::component::{current_object, current_window, Component, UpdateActi
 pub use crate::menu_builder::{menu, MenuBuilder};
 pub use crate::scope::Scope;
 pub use crate::vnode::{PropTransform, VComponent, VHandler, VNode, VObject, VProperty};
+
+pub mod lib {
+    pub use gdk;
+    pub use gdk_pixbuf;
+    pub use gio;
+    pub use glib;
+    pub use gtk;
+}
 
 /// Run an `Application` component until termination.
 pub fn run<C: 'static + Component>() -> i32 {

@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use gio::{ActionExt, ApplicationFlags, Error, File, FileExt, SimpleAction};
-use gtk::prelude::*;
-use gtk::*;
+use vgtk::lib::gio::{ActionExt, ApplicationFlags, File, FileExt, SimpleAction};
+use vgtk::lib::glib::Error;
+use vgtk::lib::gtk::prelude::*;
+use vgtk::lib::gtk::*;
 use vgtk::{ext::*, gtk, on_signal, Component, UpdateAction, VNode};
 
 use strum_macros::{Display, EnumIter};

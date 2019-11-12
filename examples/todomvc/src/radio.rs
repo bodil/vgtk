@@ -2,8 +2,8 @@ use std::fmt::{Debug, Display};
 
 use strum::IntoEnumIterator;
 
-use gtk::prelude::*;
-use gtk::*;
+use vgtk::lib::gtk::prelude::*;
+use vgtk::lib::gtk::*;
 use vgtk::{gtk, Callback, Component, UpdateAction, VNode};
 
 #[derive(Clone, Debug, Default)]

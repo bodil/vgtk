@@ -88,7 +88,7 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     let mut out = quote!(
         use vgtk::{VNode, VHandler, VProperty, VObject, VComponent};
         use vgtk::Scope;
-        use glib::StaticType;
+        use vgtk::lib::glib::StaticType;
         use std::vec::Vec;
         let object_type = #name::static_type();
         let mut properties = Vec::with_capacity(#prop_count);
@@ -99,8 +99,8 @@ pub fn expand_widget(gtk: &GtkWidget) -> TokenStream {
     if !gtk.constructor.is_empty() {
         let cons = to_stream(&gtk.constructor);
         out.extend(quote!(
-            let constructor: Option<std::boxed::Box<dyn Fn() -> glib::Object>> = Some(std::boxed::Box::new(move || {
-                glib::object::Cast::upcast::<glib::Object>(#name#cons)
+            let constructor: Option<std::boxed::Box<dyn Fn() -> vgtk::lib::glib::Object>> = Some(std::boxed::Box::new(move || {
+                vgtk::lib::glib::object::Cast::upcast::<vgtk::lib::glib::Object>(#name#cons)
             }));
         ));
     } else {
@@ -219,15 +219,15 @@ pub fn expand_property(
     };
     quote!(
         {
-            use gtk::{Container, Widget};
-            use glib::StaticType;
+            use vgtk::lib::gtk::{Container, Widget};
+            use vgtk::lib::glib::{StaticType, object::Cast};
             use vgtk::properties::{
                 IntoPropertyValue, PropertyValue, PropertyValueCoerce, PropertyValueCompare,
             };
             let value = #value;
             VProperty {
                 name: #prop_name,
-                set: std::boxed::Box::new(move |object: &glib::Object, parent: Option<&glib::Object>, force: bool| {
+                set: std::boxed::Box::new(move |object: &vgtk::lib::glib::Object, parent: Option<&vgtk::lib::glib::Object>, force: bool| {
                     #setter_prelude
                     #setter_body
                 }),
@@ -253,7 +253,7 @@ pub fn expand_handler(
     let inner_block = if async_keyword.is_some() {
         quote!({
             let scope = scope.clone();
-            glib::MainContext::ref_thread_default().spawn_local(
+            vgtk::lib::glib::MainContext::ref_thread_default().spawn_local(
                 async move {
                     let msg = async move { #body_s }.await;
                     scope.send_message(msg);
@@ -270,7 +270,8 @@ pub fn expand_handler(
         handlers.push(VHandler {
             name: #signal_name,
             id: #signal_id,
-            set: std::boxed::Box::new(move |object: &glib::Object, scope: &Scope<_>| {
+            set: std::boxed::Box::new(move |object: &vgtk::lib::glib::Object, scope: &Scope<_>| {
+                use vgtk::lib::glib::object::Cast;
                 let object: &#object_type = object.downcast_ref()
                       .unwrap_or_else(|| panic!("downcast to {:?} failed in signal setter", #object_type::static_type()));
                 let scope: Scope<_> = scope.clone();

@@ -1,8 +1,8 @@
-use gdk_pixbuf::Pixbuf;
-use gio::{Cancellable, MemoryInputStream};
-use glib::Bytes;
-use gtk::prelude::*;
-use gtk::*;
+use vgtk::lib::gdk_pixbuf::Pixbuf;
+use vgtk::lib::gio::{Cancellable, MemoryInputStream};
+use vgtk::lib::glib::Bytes;
+use vgtk::lib::gtk::prelude::*;
+use vgtk::lib::gtk::*;
 use vgtk::{ext::*, gtk, run_dialog, Component, VNode};
 
 pub struct AboutDialog {

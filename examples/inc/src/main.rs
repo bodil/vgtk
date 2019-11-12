@@ -1,5 +1,5 @@
-use gio::ApplicationFlags;
-use gtk::{prelude::*, Align, Application, Box, Button, HeaderBar, Label, Window};
+use vgtk::lib::gio::ApplicationFlags;
+use vgtk::lib::gtk::{prelude::*, Align, Application, Box, Button, HeaderBar, Label, Window};
 use vgtk::{ext::*, gtk, run, Component, UpdateAction, VNode};
 
 #[derive(Clone, Debug, Default)]

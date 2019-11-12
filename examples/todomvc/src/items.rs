@@ -1,9 +1,9 @@
 use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
 
-use gio::{Error, File, FileCreateFlags, FileExt, OutputStreamExt};
-use glib::{Bytes, FileError};
-use gtk::*;
+use vgtk::lib::gio::{File, FileCreateFlags, FileExt, OutputStreamExt};
+use vgtk::lib::glib::{Bytes, Error, FileError};
+use vgtk::lib::gtk::*;
 
 use vgtk::{gtk, VNode};
 
