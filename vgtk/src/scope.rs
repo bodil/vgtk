@@ -7,7 +7,7 @@ use std::sync::{
 use colored::Colorize;
 use log::debug;
 
-use glib::futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::UnboundedSender;
 
 use crate::component::{Component, ComponentTask};
 

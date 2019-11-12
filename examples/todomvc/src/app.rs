@@ -1,11 +1,11 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 
-use gio::{ActionExt, ApplicationFlags, SimpleAction};
+use gio::{ActionExt, ApplicationFlags, Error, File, FileExt, SimpleAction};
 use gtk::prelude::*;
 use gtk::*;
-use vgtk::{ext::*, gtk, Component, UpdateAction, VNode};
+use vgtk::{ext::*, gtk, on_signal, Component, UpdateAction, VNode};
 
-use log::{debug, error};
 use strum_macros::{Display, EnumIter};
 
 use crate::about::AboutDialog;
@@ -28,16 +28,18 @@ impl Default for Filter {
 
 #[derive(Clone, Debug)]
 pub struct Model {
-    items: Items,
+    items: Arc<Items>,
     filter: Filter,
+    file: Option<File>,
     clean: bool,
 }
 
 impl Default for Model {
     fn default() -> Self {
         Model {
-            items: Items::default(),
+            items: Default::default(),
             filter: Filter::All,
+            file: None,
             clean: true,
         }
     }
@@ -63,6 +65,7 @@ impl Model {
 
 #[derive(Clone, Debug)]
 pub enum Msg {
+    NoOp,
     Add { item: String },
     Remove { index: usize },
     Toggle { index: usize },
@@ -70,6 +73,9 @@ pub enum Msg {
     ToggleAll,
     ClearCompleted,
     Exit,
+    Loaded { file: File, items: Items },
+    Saved { file: Option<File> },
+    FileError { error: Error },
     MenuOpen,
     MenuSave,
     MenuSaveAs,
@@ -80,61 +86,98 @@ impl Component for Model {
     type Message = Msg;
     type Properties = ();
 
-    fn update(&mut self, msg: Self::Message) -> UpdateAction {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction<Self> {
         let left = self.filter(Filter::Active).count();
         match msg {
+            Msg::NoOp => return UpdateAction::None,
+            Msg::FileError { error } => {
+                return UpdateAction::defer(async move {
+                    vgtk::message_dialog(
+                        vgtk::current_window().as_ref(),
+                        DialogFlags::empty(),
+                        MessageType::Error,
+                        ButtonsType::Ok,
+                        true,
+                        format!("<b>AN ERROR HAS OCCURRED!</b>\n\n{}", error),
+                    )
+                    .await;
+                    Msg::NoOp
+                })
+            }
             Msg::Add { item } => {
-                self.items.push(Item::new(item));
+                Arc::make_mut(&mut self.items).push(Item::new(item));
                 self.clean = false;
             }
             Msg::Remove { index } => {
-                self.items.remove(index);
+                Arc::make_mut(&mut self.items).remove(index);
                 self.clean = false;
             }
             Msg::Toggle { index } => {
-                self.items[index].done = !self.items[index].done;
+                Arc::make_mut(&mut self.items)[index].done = !self.items[index].done;
                 self.clean = false;
             }
             Msg::Filter { filter } => {
                 self.filter = filter;
             }
             Msg::ToggleAll if left > 0 => {
-                self.items.iter_mut().for_each(|item| item.done = true);
+                Arc::make_mut(&mut self.items)
+                    .iter_mut()
+                    .for_each(|item| item.done = true);
                 self.clean = false;
             }
             Msg::ToggleAll => {
-                self.items.iter_mut().for_each(|item| item.done = false);
+                Arc::make_mut(&mut self.items)
+                    .iter_mut()
+                    .for_each(|item| item.done = false);
                 self.clean = false;
             }
             Msg::ClearCompleted => {
-                self.items.retain(|item| !item.done);
+                Arc::make_mut(&mut self.items).retain(|item| !item.done);
                 self.clean = false;
             }
             Msg::Exit => {
                 vgtk::quit();
                 return UpdateAction::None;
             }
-            Msg::MenuOpen => {
-                if open(self) {
-                    self.clean = true;
+            Msg::Loaded { file, items } => {
+                self.items = Arc::new(items);
+                self.file = Some(file);
+                self.clean = true;
+            }
+            Msg::Saved { file } => {
+                self.clean = true;
+                if let Some(file) = file {
+                    self.file = Some(file);
                 }
+            }
+            Msg::MenuOpen => {
+                return UpdateAction::defer(async {
+                    match open().await {
+                        Ok(Some((file, items))) => Msg::Loaded { file, items },
+                        Ok(None) => Msg::NoOp,
+                        Err(error) => Msg::FileError { error },
+                    }
+                });
             }
             Msg::MenuSave => {
-                let path = self
-                    .items
-                    .get_path()
-                    .expect("document has no file path but save menu item was active!")
-                    .to_owned();
-                if let Err(err) = self.items.write_to(path) {
-                    error!("I/O error when saving file: {:?}", err);
-                } else {
-                    self.clean = true;
-                }
+                let items = self.items.clone();
+                let file = self.file.clone().unwrap();
+                return UpdateAction::defer(async move {
+                    match save(&*items, &file).await {
+                        Ok(_) => Msg::Saved { file: None },
+                        Err(error) => Msg::FileError { error },
+                    }
+                });
             }
             Msg::MenuSaveAs => {
-                if save_as(self) {
-                    self.clean = true;
-                }
+                let items = self.items.clone();
+                return UpdateAction::defer(async move {
+                    match save_as(&*items).await {
+                        Ok(Some(file)) => Msg::Saved { file: Some(file) },
+                        Ok(None) => Msg::NoOp,
+                        Err(error) => Msg::FileError { error },
+                    }
+                });
             }
             Msg::MenuAbout => {
                 AboutDialog::run();
@@ -145,15 +188,10 @@ impl Component for Model {
     }
 
     fn view(&self) -> VNode<Model> {
-        let title = if let Some(name) = self
-            .items
-            .get_path()
-            .and_then(|p| p.file_name())
-            .and_then(|p| p.to_str())
-        {
-            name
+        let title = if let Some(name) = self.file.as_ref().and_then(|p| p.get_basename()) {
+            name.to_str().unwrap().to_string()
         } else {
-            "Untitled todo list"
+            "Untitled todo list".to_string()
         };
         let clean = if self.clean { "" } else { " *" };
 
@@ -181,7 +219,7 @@ impl Component for Model {
                     <SimpleAction::new("open", None) ApplicationWindow::accels=["<Ctrl>o"].as_ref()
                                                      enabled=true on activate=|a, _| Msg::MenuOpen/>
                     <SimpleAction::new("save", None) ApplicationWindow::accels=["<Ctrl>s"].as_ref()
-                                                     enabled=self.items.has_path() && !self.clean on activate=|_, _| Msg::MenuSave/>
+                                                     enabled=self.file.is_some() && !self.clean on activate=|_, _| Msg::MenuSave/>
                     <SimpleAction::new("save-as", None) ApplicationWindow::accels=["<Ctrl><Shift>s"].as_ref()
                                                         enabled=true on activate=|_, _| Msg::MenuSaveAs/>
 
@@ -234,7 +272,7 @@ impl Component for Model {
     }
 }
 
-fn open(model: &mut Model) -> bool {
+async fn open() -> Result<Option<(File, Items)>, Error> {
     let dialog = FileChooserNative::new(
         Some("Open a todo list"),
         vgtk::current_object()
@@ -249,28 +287,25 @@ fn open(model: &mut Model) -> bool {
     filter.set_name(Some("Todo list files"));
     filter.add_pattern("*.todo");
     dialog.add_filter(&filter);
-    let result: ResponseType = dialog.run().into();
-    if result == ResponseType::Accept {
-        debug!("Selected file path: {:?}", dialog.get_filename());
-        match Items::read_from(dialog.get_filename().unwrap()) {
-            Ok(items) => {
-                model.items = items;
-                return true;
-            }
-            Err(err) => {
-                error!("I/O error when opening file: {:?}", err);
-            }
-        }
+    dialog.show();
+    if on_signal!(dialog, connect_response).await == Ok(ResponseType::Accept) {
+        let file = dialog.get_file().unwrap();
+        Items::read_from(&file)
+            .await
+            .map(|items| Some((file, items)))
+    } else {
+        Ok(None)
     }
-    false
 }
 
-fn save_as(model: &mut Model) -> bool {
+async fn save(items: &Items, file: &File) -> Result<(), Error> {
+    items.write_to(file).await
+}
+
+async fn save_as(items: &Items) -> Result<Option<File>, Error> {
     let dialog = FileChooserNative::new(
         Some("Save your todo list"),
-        vgtk::current_object()
-            .and_then(|w| w.downcast::<Window>().ok())
-            .as_ref(),
+        vgtk::current_window().as_ref(),
         FileChooserAction::Save,
         None,
         None,
@@ -280,14 +315,11 @@ fn save_as(model: &mut Model) -> bool {
     filter.set_name(Some("Todo list files"));
     filter.add_pattern("*.todo");
     dialog.add_filter(&filter);
-    let result: ResponseType = dialog.run().into();
-    if result == ResponseType::Accept {
-        debug!("Selected file path: {:?}", dialog.get_filename());
-        if let Err(err) = model.items.write_to(dialog.get_filename().unwrap()) {
-            error!("I/O error when saving file: {:?}", err);
-        } else {
-            return true;
-        }
+    dialog.show();
+    if on_signal!(dialog, connect_response).await == Ok(ResponseType::Accept) {
+        let file = dialog.get_file().unwrap();
+        save(items, &file).await.map(|_| Some(file))
+    } else {
+        Ok(None)
     }
-    false
 }

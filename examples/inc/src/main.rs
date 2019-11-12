@@ -17,7 +17,7 @@ impl Component for Model {
     type Message = Message;
     type Properties = ();
 
-    fn update(&mut self, msg: Self::Message) -> UpdateAction {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction<Self> {
         match msg {
             Message::Inc => {
                 self.counter += 1;

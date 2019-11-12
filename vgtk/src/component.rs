@@ -1,14 +1,16 @@
-use glib::futures::{
+use futures::{
     channel::mpsc::{unbounded, UnboundedSender},
+    future::FutureExt,
     stream::{select, Stream},
-    task::Context,
-    Future, Poll, StreamExt,
+    task::{Context, Poll},
+    StreamExt,
 };
-use glib::{Cast, Object, ObjectExt, WeakRef};
+use glib::{Cast, MainContext, Object, ObjectExt, WeakRef};
 use gtk::{Application, GtkApplicationExt, Widget, WidgetExt, Window};
 
 use std::any::TypeId;
 use std::fmt::{Debug, Error, Formatter};
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::RwLock;
 
@@ -19,17 +21,23 @@ use crate::scope::{AnyScope, Scope};
 use crate::vdom::State;
 use crate::vnode::VNode;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum UpdateAction {
+pub enum UpdateAction<C: Component> {
     None,
     Render,
+    Defer(Pin<Box<dyn Future<Output = C::Message> + 'static>>),
+}
+
+impl<C: Component> UpdateAction<C> {
+    pub fn defer(job: impl Future<Output = C::Message> + 'static) -> Self {
+        UpdateAction::Defer(job.boxed_local())
+    }
 }
 
 pub trait Component: Default + Unpin {
-    type Message: Clone + Send + Debug;
+    type Message: Clone + Send + Debug + Unpin;
     type Properties: Clone + Default;
 
-    fn update(&mut self, _msg: Self::Message) -> UpdateAction {
+    fn update(&mut self, _msg: Self::Message) -> UpdateAction<Self> {
         UpdateAction::None
     }
 
@@ -37,7 +45,7 @@ pub trait Component: Default + Unpin {
         Self::default()
     }
 
-    fn change(&mut self, _props: Self::Properties) -> UpdateAction {
+    fn change(&mut self, _props: Self::Properties) -> UpdateAction<Self> {
         unimplemented!("add a Component::change() implementation")
     }
 
@@ -192,6 +200,13 @@ where
         PartialComponentTask::new(props, parent, parent_scope).finalise()
     }
 
+    fn run_job(&self, job: impl Future<Output = C::Message> + 'static) {
+        let scope = self.scope.clone();
+        MainContext::ref_thread_default().spawn_local(async move {
+            scope.send_message(job.await);
+        })
+    }
+
     pub fn process(&mut self, ctx: &mut Context) -> Poll<()> {
         let mut render = false;
         loop {
@@ -203,16 +218,24 @@ where
             );
             match next {
                 Poll::Ready(Some(msg)) => match msg {
-                    ComponentMessage::Update(msg) => {
-                        if self.state.update(msg) == UpdateAction::Render {
+                    ComponentMessage::Update(msg) => match self.state.update(msg) {
+                        UpdateAction::Defer(job) => {
+                            self.run_job(job);
+                        }
+                        UpdateAction::Render => {
                             render = true;
                         }
-                    }
-                    ComponentMessage::Props(props) => {
-                        if self.state.change(props) == UpdateAction::Render {
+                        UpdateAction::None => {}
+                    },
+                    ComponentMessage::Props(props) => match self.state.change(props) {
+                        UpdateAction::Defer(job) => {
+                            self.run_job(job);
+                        }
+                        UpdateAction::Render => {
                             render = true;
                         }
-                    }
+                        UpdateAction::None => {}
+                    },
                     ComponentMessage::Mounted => {
                         debug!(
                             "{} {}",

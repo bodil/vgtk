@@ -16,7 +16,9 @@ use gio::Cancellable;
 use glib::prelude::*;
 use glib::MainContext;
 use gtk::prelude::*;
-use gtk::{Application, Dialog, ResponseType, Window};
+use gtk::{
+    Application, ButtonsType, Dialog, DialogFlags, MessageDialog, MessageType, ResponseType, Window,
+};
 
 use futures::channel::oneshot::{self, Canceled};
 use std::future::Future;
@@ -111,4 +113,49 @@ pub fn quit() {
     gio::Application::get_default()
         .expect("no default Application!")
         .quit();
+}
+
+#[macro_export]
+macro_rules! on_signal {
+    ($object:expr, $connect:ident) => {
+        async {
+            let (notify, result) = futures::channel::oneshot::channel();
+            let state = std::sync::Arc::new(std::sync::Mutex::new((None, Some(notify))));
+            let state_outer = state.clone();
+            let id = $object.$connect(move |obj, value| {
+                let mut lock = state.lock().unwrap();
+                if let Some(notify) = lock.1.take() {
+                    if notify.send(value).is_ok() {}
+                }
+                if let Some(handler) = lock.0.take() {
+                    obj.disconnect(handler);
+                }
+            });
+            state_outer.lock().unwrap().0 = Some(id);
+            result.await
+        }
+    };
+}
+
+pub async fn message_dialog<W, S>(
+    parent: Option<&W>,
+    flags: DialogFlags,
+    message_type: MessageType,
+    buttons: ButtonsType,
+    is_markup: bool,
+    message: S,
+) -> ResponseType
+where
+    W: IsA<Window>,
+    S: AsRef<str>,
+{
+    let dialog = MessageDialog::new(parent, flags, message_type, buttons, message.as_ref());
+    dialog.set_modal(true);
+    if is_markup {
+        dialog.set_markup(message.as_ref());
+    }
+    dialog.show();
+    let response = on_signal!(dialog, connect_response).await;
+    dialog.destroy();
+    response.unwrap()
 }

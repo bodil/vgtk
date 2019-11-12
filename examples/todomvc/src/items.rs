@@ -1,9 +1,8 @@
-use std::fs::File;
 use std::iter::FromIterator;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
-use std::path::PathBuf;
 
+use gio::{Error, File, FileCreateFlags, FileExt, OutputStreamExt};
+use glib::{Bytes, FileError};
 use gtk::*;
 
 use vgtk::{gtk, VNode};
@@ -52,41 +51,33 @@ impl Item {
 #[derive(Clone, Default, Debug)]
 pub struct Items {
     items: Vec<Item>,
-    path: Option<PathBuf>,
 }
 
 impl Items {
-    pub fn read_from<P: AsRef<Path>>(path: P) -> std::io::Result<Items> {
-        let path = path.as_ref();
-        let file = File::open(path)?;
-        serde_json::from_reader(file)
-            .map_err(From::from)
-            .map(|items| Items {
-                items,
-                path: Some(path.to_owned()),
+    pub async fn read_from(file: &File) -> Result<Items, Error> {
+        serde_json::from_slice(&file.load_contents_async_future().await?.0)
+            .map(|items| Items { items })
+            .map_err(|err| {
+                Error::new(
+                    FileError::Inval,
+                    &format!(
+                        "Parse error in file \"{}\": {}",
+                        file.get_basename().unwrap().to_str().unwrap(),
+                        err
+                    ),
+                )
             })
     }
 
-    pub fn write_to<P: AsRef<Path>>(&mut self, path: P) -> std::io::Result<()> {
-        let path = path.as_ref();
-        let file = File::create(path)?;
-        let result = serde_json::to_writer_pretty(file, &self.items).map_err(From::from);
-        if result.is_ok() {
-            self.path = Some(path.to_owned());
-        }
-        result
-    }
-
-    pub fn has_path(&self) -> bool {
-        self.path.is_some()
-    }
-
-    pub fn get_path(&self) -> Option<&Path> {
-        if let Some(ref path) = self.path {
-            Some(path.as_path())
-        } else {
-            None
-        }
+    pub async fn write_to(&self, file: &File) -> Result<(), Error> {
+        let data = serde_json::to_vec_pretty(&self.items)
+            .map_err(|err| Error::new(FileError::Inval, &format!("{}", err)))?;
+        let out = file
+            .replace_async_future(None, false, FileCreateFlags::empty(), Default::default())
+            .await?;
+        out.write_bytes_async_future(&Bytes::from_owned(data), Default::default())
+            .await?;
+        out.close_async_future(Default::default()).await
     }
 }
 
@@ -111,7 +102,6 @@ impl FromIterator<Item> for Items {
     {
         Items {
             items: iter.into_iter().collect(),
-            path: None,
         }
     }
 }

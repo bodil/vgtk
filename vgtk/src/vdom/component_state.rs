@@ -1,4 +1,4 @@
-use glib::futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
 use glib::{MainContext, Object};
 use gtk::{Widget, WidgetExt};

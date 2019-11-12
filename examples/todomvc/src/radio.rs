@@ -37,12 +37,12 @@ where
         props
     }
 
-    fn change(&mut self, props: Self::Properties) -> UpdateAction {
+    fn change(&mut self, props: Self::Properties) -> UpdateAction<Self> {
         *self = props;
         UpdateAction::Render
     }
 
-    fn update(&mut self, msg: Self::Message) -> UpdateAction {
+    fn update(&mut self, msg: Self::Message) -> UpdateAction<Self> {
         match msg {
             RadioMsg::Selected(selected) => {
                 self.active = selected;
