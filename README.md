@@ -1,7 +1,27 @@
 # vgtk
 
-A declarative UI framework built on [GTK](https://www.gtk.org/) and
-[Gtk-rs](https://gtk-rs.org/).
+A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/)
+and [Gtk-rs](https://gtk-rs.org/).
+
+// FIXME: needs a catchy name to attract the zoomers
+
+## At A Glance
+
+* A clean, functional component model inspired by the [Elm
+  architecture](https://guide.elm-lang.org/architecture/),
+  [Redux](https://redux.js.org/) and [Yew](https://github.com/yewstack/yew).
+* A declarative DSL for composing GTK widgets inspired by
+  [React](https://reactjs.org/) and
+  [JSX](https://reactjs.org/docs/introducing-jsx.html), using virtual "DOM"
+  diffing for efficient updates.
+* Fully cross platform with a native look and feel for Linux, Windows and macOS.
+* Built on Rust's
+  [`Future`](https://doc.rust-lang.org/std/future/trait.Future.html)s using
+  [GLib](https://developer.gnome.org/glib/stable/)'s event loop, giving you
+  [async/await superpowers](https://rust-lang.github.io/async-book/) cleanly
+  integrated with the GTK event model.
+* Absolutely no need for an embedded browser engine, unless you [really want
+  one](https://webkitgtk.org/).
 
 ## Documentation
 
