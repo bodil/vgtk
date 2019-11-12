@@ -176,7 +176,7 @@ impl Component for Model {
                         on activate=|a, _| Msg::Exit/>
                 <SimpleAction::new("about", None) enabled=true on activate=|_, _| Msg::MenuAbout/>
 
-                <ApplicationWindow default_width=800 default_height=480 border_width=20u32 on destroy=|_| Msg::Exit>
+                <ApplicationWindow default_width=800 default_height=480 border_width=20 on destroy=|_| Msg::Exit>
 
                     <SimpleAction::new("open", None) ApplicationWindow::accels=["<Ctrl>o"].as_ref()
                                                      enabled=true on activate=|a, _| Msg::MenuOpen/>
