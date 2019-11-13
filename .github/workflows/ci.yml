@@ -17,6 +17,20 @@ jobs:
     steps:
       - uses: actions/checkout@v1
 
+      - name: Cache Rustup
+        id: cache-rustup
+        uses: actions/cache@v1
+        with:
+          path: ~/.rustup
+          key: ${{ runner.os }}-${{ matrix.rust }}-rustup
+
+      - name: Cache Cargo
+        id: cache-cargo
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo
+
       # lunix deps
       - name: (Lunix) Install Gtk build environment
         if: matrix.os == 'ubuntu-latest'
