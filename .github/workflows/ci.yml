@@ -24,14 +24,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
 
-      # check windows deps
-      - name: (Windows) Check available Gtk version
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          vcpkg search gtk | Select-String "^gtk " > gtk-version.txt
-          Get-Content gtk-version.txt
-
       # cache windows deps
       - name: (Windows) Cache vcpkg packages
         if: matrix.os == 'windows-latest'
@@ -39,11 +31,11 @@ jobs:
         uses: actions/cache@v1
         with:
           path: C:\vcpkg\installed
-          key: ${{ runner.os }}-vcpkg-gtk-${{ hashFiles('gtk-version.txt') }}
+          key: ${{ runner.os }}-${{ matrix.rust }}-vcpkg
 
       # windows deps
       - name: (Windows) Install Gtk build environment
-        if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+        if: matrix.os == 'windows-latest'
         run: |
           vcpkg install gtk:x64-windows
           copy C:\vcpkg\installed\x64-windows\lib\gtk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gtk-3.lib
