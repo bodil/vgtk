@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest] # , macOS-latest
+        os: [ubuntu-latest, windows-latest, macOS-latest]
         rust: [stable, beta, nightly]
 
     steps:
@@ -23,6 +23,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
+
+      # mac deps
+      - name: (macOS) Install Gtk build environment
+        if: matrix.os == 'macOS-latest'
+        run: |
+          brew install gtk+3
 
       # check windows deps
       - name: (Windows) Check available Gtk version
@@ -55,8 +61,8 @@ jobs:
           rust-version: ${{ matrix.rust }}
       - name: Run tests in macros
         run: cd macros; cargo test --all-features
-      - name: (Lunix) Run tests in lib
-        if: matrix.os == 'ubuntu-latest'
+      - name: (Cowindows) Run tests in lib
+        if: matrix.os != 'windows-latest'
         run: cd vgtk; cargo test --all-features
       - name: (Windows) Run tests in lib
         if: matrix.os == 'windows-latest'
