@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+#[cfg(feature = "grid-layout")]
+use vgtk::grid::GridProps;
 use vgtk::lib::gio::{ActionExt, ApplicationFlags, File, FileExt, SimpleAction};
 use vgtk::lib::glib::Error;
 use vgtk::lib::gtk::prelude::*;
@@ -11,6 +13,7 @@ use strum_macros::{Display, EnumIter};
 
 use crate::about::AboutDialog;
 use crate::items::{Item, Items};
+#[cfg(feature = "box-layout")]
 use crate::radio::Radio;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Display, EnumIter)]
@@ -59,6 +62,108 @@ impl Model {
         match left {
             1 => String::from("1 item left"),
             left => format!("{} items left", left),
+        }
+    }
+
+    #[cfg(feature = "box-layout")]
+    fn main_panel(&self) -> VNode<Model> {
+        gtk! {
+            <Box spacing=10 orientation=Orientation::Vertical>
+                <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
+                    <Button image="edit-select-all" relief=ReliefStyle::Half
+                            always_show_image=true on clicked=|_| Msg::ToggleAll/>
+                    <Entry placeholder_text="What needs to be done?"
+                           Box::expand=true Box::fill=true
+                           on activate=|entry| {
+                               let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
+                               entry.select_region(0, label.len() as i32);
+                               Msg::Add {
+                                   item: label
+                               }
+                           } />
+                </Box>
+                <ScrolledWindow Box::expand=true Box::fill=true>
+                    <ListBox selection_mode=SelectionMode::None>
+                        {
+                            self.filter(self.filter).enumerate()
+                                .map(|(index, item)| item.render(index))
+                        }
+                    </ListBox>
+                </ScrolledWindow>
+                <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
+                    <Label label=self.left_label()/>
+                    <@Radio<Filter> active=self.filter Box::center_widget=true on_changed=|filter| Msg::Filter { filter } />
+                    {
+                        if self.filter(Filter::Completed).count() > 0 {
+                            (gtk!{
+                                 <Button label="Clear completed" Box::pack_type=PackType::End
+                                         on clicked=|_| Msg::ClearCompleted/>
+                            }).into_iter()
+                        } else {
+                            VNode::empty()
+                        }
+                    }
+                </Box>
+            </Box>
+        }
+    }
+
+    #[cfg(feature = "grid-layout")]
+    fn main_panel(&self) -> VNode<Model> {
+        gtk! {
+            <Grid row_spacing=10 column_spacing=10>
+                // Row 0
+                <Button image="edit-select-all" relief=ReliefStyle::Half
+                        always_show_image=true on clicked=|_| Msg::ToggleAll/>
+                <Entry placeholder_text="What needs to be done?"
+                       Grid::left=1
+                       hexpand=true
+                       on activate=|entry| {
+                           let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
+                           entry.select_region(0, label.len() as i32);
+                           Msg::Add {
+                               item: label
+                           }
+                       } />
+
+                // Row 1
+                <ScrolledWindow Grid::top=1 Grid::width=2 hexpand=true vexpand=true>
+                    <ListBox selection_mode=SelectionMode::None>
+                        {
+                            self.filter(self.filter).enumerate()
+                                .map(|(index, item)| item.render(index))
+                        }
+                    </ListBox>
+                </ScrolledWindow>
+
+                // Row 2
+                <Grid Grid::top=2 Grid::width=2 hexpand=true>
+                    <Label label=self.left_label() halign=Align::Start/>
+                    <Box orientation=Orientation::Horizontal spacing=10 halign=Align::Center hexpand=true Grid::left=1>
+                        <ToggleButton label="All"
+                                      active=self.filter == Filter::All
+                                      on toggled=|_| Msg::Filter { filter: Filter::All }/>
+                        <ToggleButton label="Active"
+                                      active=self.filter == Filter::Active
+                                      on toggled=|_| Msg::Filter { filter: Filter::Active }/>
+                        <ToggleButton label="Completed"
+                                      active=self.filter == Filter::Completed
+                                      on toggled=|_| Msg::Filter { filter: Filter::Completed }/>
+                    </Box>
+                    {
+                        if self.filter(Filter::Completed).count() > 0 {
+                            (gtk!{
+                                 <Button label="Clear completed"
+                                         Grid::left=2
+                                         halign=Align::End
+                                         on clicked=|_| Msg::ClearCompleted/>
+                            }).into_iter()
+                        } else {
+                            VNode::empty()
+                        }
+                    }
+                </Grid>
+            </Grid>
         }
     }
 }
@@ -229,43 +334,9 @@ impl Component for Model {
                             <Menu::new_from_model(&main_menu)/>
                         </MenuButton>
                     </HeaderBar>
-                    <Box spacing=10 orientation=Orientation::Vertical>
-                        <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
-                            <Button image="edit-select-all" relief=ReliefStyle::Half
-                                    always_show_image=true on clicked=|_| Msg::ToggleAll/>
-                            <Entry placeholder_text="What needs to be done?"
-                                   Box::expand=true Box::fill=true
-                                   on activate=|entry| {
-                                       let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
-                                       entry.select_region(0, label.len() as i32);
-                                       Msg::Add {
-                                           item: label
-                                       }
-                                   } />
-                        </Box>
-                        <ScrolledWindow Box::expand=true Box::fill=true>
-                            <ListBox selection_mode=SelectionMode::None>
-                                {
-                                    self.filter(self.filter).enumerate()
-                                        .map(|(index, item)| item.render(index))
-                                }
-                            </ListBox>
-                        </ScrolledWindow>
-                        <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
-                            <Label label=self.left_label()/>
-                            <@Radio<Filter> active=self.filter Box::center_widget=true on_changed=|filter| Msg::Filter { filter } />
-                            {
-                                if self.filter(Filter::Completed).count() > 0 {
-                                    (gtk!{
-                                         <Button label="Clear completed" Box::pack_type=PackType::End
-                                                 on clicked=|_| Msg::ClearCompleted/>
-                                    }).into_iter()
-                                } else {
-                                    VNode::empty()
-                                }
-                            }
-                        </Box>
-                    </Box>
+                    {
+                        self.main_panel()
+                    }
                 </ApplicationWindow>
             </Application>
         }

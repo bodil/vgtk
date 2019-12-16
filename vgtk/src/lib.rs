@@ -61,6 +61,7 @@
 mod callback;
 mod component;
 pub mod ext;
+pub mod grid;
 mod menu_builder;
 #[doc(hidden)]
 pub mod properties;
