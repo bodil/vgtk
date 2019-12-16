@@ -4,7 +4,7 @@ use gio::{Action, ActionExt, ActionMapExt};
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
     self, prelude::*, Application, ApplicationWindow, Bin, Box as GtkBox, Builder, Container,
-    Dialog, Menu, MenuButton, MenuItem, ShortcutsWindow, Widget, Window,
+    Dialog, Grid, GridExt, Menu, MenuButton, MenuItem, ShortcutsWindow, Widget, Window,
 };
 
 use super::State;
@@ -168,6 +168,19 @@ fn add_child<Model: Component>(
         } else {
             panic!(
                 "Box's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(parent) = parent.downcast_ref::<Grid>() {
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            // by default we put widgets in the top left corner of the grid
+            // with row and col span of 1; this would typically get overridden
+            // via props but setting the default is important in order to avoid
+            // making the user specify these for every single child widget
+            parent.attach(widget, 0, 0, 1, 1);
+        } else {
+            panic!(
+                "Grid's children must be Widgets, but {} was found.",
                 child.get_type()
             );
         }
