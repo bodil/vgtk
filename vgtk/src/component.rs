@@ -112,7 +112,7 @@ pub(crate) enum ComponentMessage<C: Component> {
 }
 
 impl<C: Component> Debug for ComponentMessage<C> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
             ComponentMessage::Update(msg) => write!(
                 f,
@@ -210,12 +210,12 @@ where
         (self.sender, self.task)
     }
 
-    pub fn object(&self) -> Object {
+    pub(crate) fn object(&self) -> Object {
         self.task.ui_state.as_ref().unwrap().object().clone()
     }
 }
 
-pub struct ComponentTask<C, P>
+pub(crate) struct ComponentTask<C, P>
 where
     C: Component,
     P: Component,
@@ -247,7 +247,7 @@ where
         })
     }
 
-    pub fn process(&mut self, ctx: &mut Context) -> Poll<()> {
+    pub(crate) fn process(&mut self, ctx: &mut Context<'_>) -> Poll<()> {
         let mut render = false;
         loop {
             let next = Stream::poll_next(self.channel.as_mut(), ctx);
@@ -332,7 +332,7 @@ where
         }
     }
 
-    pub fn object(&self) -> Option<Object> {
+    pub(crate) fn object(&self) -> Option<Object> {
         self.ui_state.as_ref().map(|state| state.object().clone())
     }
 
@@ -417,7 +417,7 @@ where
 {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         LOCAL_CONTEXT.with(|key| {
             *key.write().unwrap() = LocalContext {
                 parent_scope: self.parent_scope.as_ref().map(|scope| scope.clone().into()),

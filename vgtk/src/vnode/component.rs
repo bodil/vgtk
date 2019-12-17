@@ -45,7 +45,10 @@ impl AnyProps {
                 TypeId::of::<Props>()
             )
         }
-        unsafe { *Box::from_raw(self.data as *mut Props) }
+        #[allow(unsafe_code)]
+        unsafe {
+            *Box::from_raw(self.data as *mut Props)
+        }
     }
 }
 

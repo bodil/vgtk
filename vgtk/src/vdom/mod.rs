@@ -6,12 +6,12 @@ use crate::scope::Scope;
 use crate::vnode::VNode;
 
 mod component_state;
-pub use component_state::ComponentState;
+pub(crate) use component_state::ComponentState;
 
 mod gtk_state;
 use gtk_state::GtkState;
 
-pub enum State<Model: Component> {
+pub(crate) enum State<Model: Component> {
     Gtk(GtkState<Model>),
     Component(ComponentState<Model>),
 }
@@ -88,7 +88,7 @@ impl<Model: 'static + Component> State<Model> {
     }
 
     /// Get the Glib `Object` represented by this state.
-    pub fn object(&self) -> &Object {
+    pub(crate) fn object(&self) -> &Object {
         match self {
             State::Gtk(state) => &state.object,
             State::Component(state) => &state.object,
@@ -96,7 +96,7 @@ impl<Model: 'static + Component> State<Model> {
     }
 
     /// Get the Gtk `Widget` represented by this state, if it has a `Widget`.
-    pub fn widget(&self) -> Option<&Widget> {
+    pub(crate) fn widget(&self) -> Option<&Widget> {
         match self {
             State::Gtk(state) => state.object.downcast_ref::<Widget>(),
             State::Component(state) => state.object.downcast_ref::<Widget>(),

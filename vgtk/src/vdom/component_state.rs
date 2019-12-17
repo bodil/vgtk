@@ -68,7 +68,7 @@ impl<Model: 'static + Component> ComponentState<Model> {
     }
 }
 
-pub struct SubcomponentState<Model: Component> {
+pub(crate) struct SubcomponentState<Model: Component> {
     channel: UnboundedSender<ComponentMessage<Model>>,
 }
 

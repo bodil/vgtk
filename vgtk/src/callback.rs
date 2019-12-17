@@ -5,6 +5,7 @@ use std::rc::Rc;
 pub struct Callback<A>(pub(crate) Rc<dyn Fn(A)>);
 
 impl<A: Debug> Callback<A> {
+    /// Send a value to the callback.
     pub fn send(&self, value: A) {
         (self.0)(value)
     }
@@ -23,7 +24,7 @@ impl<A> PartialEq for Callback<A> {
 }
 
 impl<A> Debug for Callback<A> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "Callback()")
     }
 }

@@ -101,7 +101,7 @@ impl<C: 'static + Component> From<Scope<C>> for AnyScope {
         let drop = |ptr: &mut AtomicPtr<()>| {
             let ptr = ptr.swap(std::ptr::null_mut(), Ordering::SeqCst);
             if !ptr.is_null() {
-                #[allow(clippy::cast_ptr_alignment)]
+                #[allow(unsafe_code)]
                 let scope = unsafe { Box::from_raw(ptr as *mut Scope<C>) };
                 std::mem::drop(scope)
             }
@@ -121,25 +121,11 @@ impl Drop for AnyScope {
 }
 
 impl AnyScope {
-    // pub fn try_into<C: 'static + Component>(self) -> Result<Box<Scope<C>>, Self> {
-    //     if TypeId::of::<C::Properties>() == self.type_id {
-    //         let ptr = self.ptr.swap(std::ptr::null_mut(), Ordering::SeqCst);
-    //         if ptr.is_null() {
-    //             panic!("AnyScope: can't consume dropped value")
-    //         } else {
-    //             #[allow(clippy::cast_ptr_alignment)]
-    //             Ok(unsafe { Box::from_raw(ptr as *mut Scope<C>) })
-    //         }
-    //     } else {
-    //         Err(self)
-    //     }
-    // }
-
-    pub fn try_get<C: 'static + Component>(&self) -> Option<&'static Scope<C>> {
+    pub(crate) fn try_get<C: 'static + Component>(&self) -> Option<&'static Scope<C>> {
         if TypeId::of::<C::Properties>() == self.type_id {
-            #[allow(clippy::cast_ptr_alignment)]
+            #[allow(unsafe_code)]
             unsafe {
-                (self.ptr.load(Ordering::SeqCst) as *const Scope<C>).as_ref()
+                (self.ptr.load(Ordering::Relaxed) as *const Scope<C>).as_ref()
             }
         } else {
             None

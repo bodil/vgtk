@@ -3,6 +3,8 @@
 //! It is generally a good idea to `use vgtk::ext::*;` wherever you're using the
 //! `gtk!` macro.
 
+#![allow(missing_docs)]
+
 use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
@@ -14,7 +16,13 @@ use gtk::{
 use colored::Colorize;
 use log::trace;
 
+/// Helper trait for `Application`.
 pub trait ApplicationHelpers: GtkApplicationExt {
+    /// Construct a new `Application` and panic if it fails.
+    ///
+    /// This is like `Application::new`, but returns an `Application` instead of
+    /// an `Option<Application>`, so you can use it as a constructor in the `gtk!`
+    /// macro.
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
         Application::new(application_id, flags).expect("unable to create Application object")
     }
@@ -47,6 +55,7 @@ pub trait ApplicationHelpers: GtkApplicationExt {
 
 impl<A> ApplicationHelpers for A where A: GtkApplicationExt {}
 
+/// Helper trait for `ApplicationWindow`.
 pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Window> {
     fn get_child_accels<P: IsA<Action>>(&self, action: &P) -> Vec<GString> {
         let app = self
@@ -99,6 +108,7 @@ pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Wi
 
 impl<A> ApplicationWindowHelpers for A where A: ApplicationWindowExt + GtkWindowExt + IsA<Window> {}
 
+/// Helper trait for `Window`.
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32 {
         self.get_property_default_height()
@@ -143,6 +153,7 @@ pub trait WindowExtHelpers: GtkWindowExt {
 
 impl<A> WindowExtHelpers for A where A: GtkWindowExt {}
 
+/// Helper trait for `Box`.
 pub trait BoxExtHelpers: BoxExt {
     fn get_child_center_widget(&self, _child: &Object) -> bool {
         // Always compare true, it's all taken care of in add_child().
@@ -156,6 +167,7 @@ pub trait BoxExtHelpers: BoxExt {
 
 impl<A> BoxExtHelpers for A where A: BoxExt {}
 
+/// Helper trait for `Image`.
 pub trait ImageExtHelpers: ImageExt {
     fn set_pixbuf(&self, pixbuf: Option<Pixbuf>) {
         self.set_from_pixbuf(pixbuf.as_ref());
@@ -164,6 +176,7 @@ pub trait ImageExtHelpers: ImageExt {
 
 impl<A> ImageExtHelpers for A where A: ImageExt {}
 
+/// Helper trait for `Label`.
 pub trait LabelExtHelpers: LabelExt {
     fn get_markup(&self) -> Option<GString> {
         self.get_label()

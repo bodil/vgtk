@@ -1,5 +1,9 @@
 //! A declarative UI framework built on [GTK] and [Gtk-rs].
 //!
+//! ## Overview
+//!
+//!
+//!
 //! ## Show Me!
 //!
 //! ```rust,no_run
@@ -57,6 +61,11 @@
 //!
 //! [GTK]: https://www.gtk.org/
 //! [Gtk-rs]: https://gtk-rs.org/
+
+#![forbid(rust_2018_idioms)]
+#![deny(nonstandard_style, unsafe_code)]
+#![warn(unreachable_pub, missing_docs)]
+#![allow(clippy::needless_doctest_main)]
 
 mod callback;
 mod component;

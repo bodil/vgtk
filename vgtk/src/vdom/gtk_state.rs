@@ -12,8 +12,8 @@ use crate::component::Component;
 use crate::scope::Scope;
 use crate::vnode::{VHandler, VNode, VObject, VProperty};
 
-pub struct GtkState<Model: Component> {
-    pub object: Object,
+pub(crate) struct GtkState<Model: Component> {
+    pub(crate) object: Object,
     handlers: HashMap<(&'static str, &'static str), SignalHandlerId>,
     children: Vec<State<Model>>,
 }
