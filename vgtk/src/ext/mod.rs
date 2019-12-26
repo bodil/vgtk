@@ -16,6 +16,9 @@ use gtk::{
 use colored::Colorize;
 use log::trace;
 
+pub mod grid;
+pub use grid::GridExtHelpers;
+
 /// Helper trait for `Application`.
 pub trait ApplicationHelpers: GtkApplicationExt {
     /// Construct a new `Application` and panic if it fails.

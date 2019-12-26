@@ -1,8 +1,6 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-#[cfg(feature = "grid-layout")]
-use vgtk::grid::GridProps;
 use vgtk::lib::gio::{ActionExt, ApplicationFlags, File, FileExt, SimpleAction};
 use vgtk::lib::glib::Error;
 use vgtk::lib::gtk::prelude::*;
