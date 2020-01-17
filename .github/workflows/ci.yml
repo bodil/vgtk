@@ -1,115 +1,126 @@
 name: Continuous Integration
 on:
-  push:
-  pull_request:
-  schedule:
-    - cron: "0 0 1,15 * *"
+    push:
+    pull_request:
+    schedule:
+        - cron: "0 0 1,15 * *"
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust: [stable, beta, nightly]
+    test:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macOS-latest]
+                rust: [stable, beta, nightly]
+                # "verbose" just means debug mode here, it's effectively a no-op flag
+                release: [verbose, release]
 
-    steps:
-      - uses: actions/checkout@v1
+        steps:
+            - uses: actions/checkout@v1
 
-      # lunix deps
-      - name: (Lunix) Install Gtk build environment
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev
+            # lunix deps
+            - name: (Lunix) Install Gtk build environment
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libgtk-3-dev
 
-      # mac deps
-      - name: (macOS) Install Gtk build environment
-        if: matrix.os == 'macOS-latest'
-        run: |
-          brew install gtk+3
+            # mac deps
+            - name: (macOS) Install Gtk build environment
+              if: matrix.os == 'macOS-latest'
+              run: |
+                  brew install gtk+3
 
-      # check windows deps
-      - name: (Windows) Check available Gtk version
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          vcpkg search gtk | Select-String "^gtk " > gtk-version.txt
-          Get-Content gtk-version.txt
+            # check windows deps
+            - name: (Windows) Check available Gtk version
+              if: matrix.os == 'windows-latest'
+              shell: pwsh
+              run: |
+                  vcpkg search gtk | Select-String "^gtk " > gtk-version.txt
+                  Get-Content gtk-version.txt
 
-      # cache windows deps
-      - name: (Windows) Cache vcpkg packages
-        if: matrix.os == 'windows-latest'
-        id: cache-vcpkg
-        uses: actions/cache@v1
-        with:
-          path: C:\vcpkg\installed
-          key: ${{ runner.os }}-vcpkg-gtk-${{ hashFiles('gtk-version.txt') }}
+            # cache windows deps
+            - name: (Windows) Cache vcpkg packages
+              if: matrix.os == 'windows-latest'
+              id: cache-vcpkg
+              uses: actions/cache@v1
+              with:
+                  path: C:\vcpkg\installed
+                  key: ${{ runner.os }}-vcpkg-gtk-${{ hashFiles('gtk-version.txt') }}
 
-      # windows deps
-      - name: (Windows) Install Gtk build environment
-        if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
-        run: |
-          vcpkg install gtk:x64-windows
-          copy C:\vcpkg\installed\x64-windows\lib\gtk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gtk-3.lib
-          copy C:\vcpkg\installed\x64-windows\lib\gdk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gdk-3.lib
+            # windows deps
+            - name: (Windows) Install Gtk build environment
+              if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+              run: |
+                  vcpkg install gtk:x64-windows
+                  copy C:\vcpkg\installed\x64-windows\lib\gtk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gtk-3.lib
+                  copy C:\vcpkg\installed\x64-windows\lib\gdk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gdk-3.lib
 
-      # cargo away
-      - uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: ${{ matrix.rust }}
-      - name: Run tests in macros
-        run: cd macros; cargo test --all-features
-      - name: (Cowindows) Run tests in lib
-        if: matrix.os != 'windows-latest'
-        run: cd vgtk; cargo test --all-features
-      - name: (Windows) Run tests in lib
-        if: matrix.os == 'windows-latest'
-        env:
-          GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
-          LIB: C:\vcpkg\installed\x64-windows\lib
-        run: cd vgtk; cargo test --all-features
+            # cargo away
+            - uses: hecrj/setup-rust-action@v1
+              with:
+                  rust-version: ${{ matrix.rust }}
+            - name: (Cowindows) Build tree
+              if: matrix.os != 'windows-latest'
+              run: cargo build --all-features --verbose --verbose --${{ matrix.release }}
+            - name: (Windows) Build tree
+              if: matrix.os == 'windows-latest'
+              env:
+                  GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
+                  LIB: C:\vcpkg\installed\x64-windows\lib
+              run: cargo build --all-features --verbose --verbose --${{ matrix.release }}
+            - name: Run tests in macros
+              run: cd macros; cargo test --all-features --verbose --verbose --${{ matrix.release }}
+            - name: (Cowindows) Run tests in lib
+              if: matrix.os != 'windows-latest'
+              run: cd vgtk; cargo test --all-features --verbose --verbose --${{ matrix.release }}
+            - name: (Windows) Run tests in lib
+              if: matrix.os == 'windows-latest'
+              env:
+                  GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
+                  LIB: C:\vcpkg\installed\x64-windows\lib
+              run: cd vgtk; cargo test --all-features --verbose --verbose --${{ matrix.release }}
 
-  clippy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install Gtk build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev
-      - uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: stable
-          components: clippy
-      - uses: actions/checkout@v1
-      - name: Clippy
-        run: cargo clippy -- -D warnings
+    clippy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Install Gtk build environment
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libgtk-3-dev
+            - uses: hecrj/setup-rust-action@v1
+              with:
+                  rust-version: stable
+                  components: clippy
+            - uses: actions/checkout@v1
+            - name: Clippy
+              run: cargo clippy -- -D warnings
 
-  rustdoc:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install Gtk build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev
-      - uses: hecrj/setup-rust-action@v1
-      - uses: actions/checkout@master
-      - name: Build docs
-        run: |
-          cargo doc --all-features --package vgtk
-          cat > target/doc/index.html <<EOF
-          <!doctype html>
-          <html><head>
-            <meta http-equiv="refresh" content="0; URL='vgtk/'" />
-          </head></html>
-          EOF
-      - name: Deploy to Github Pages
-        uses: crazy-max/ghaction-github-pages@master
-        if: success()
-        with:
-          target_branch: gh-pages
-          build_dir: target/doc
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_PAT: ${{ secrets.ACCESS_TOKEN }}
+    rustdoc:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Install Gtk build environment
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libgtk-3-dev
+            - uses: hecrj/setup-rust-action@v1
+            - uses: actions/checkout@master
+            - name: Build docs
+              run: |
+                  cargo doc --all-features --package vgtk
+                  cat > target/doc/index.html <<EOF
+                  <!doctype html>
+                  <html><head>
+                    <meta http-equiv="refresh" content="0; URL='vgtk/'" />
+                  </head></html>
+                  EOF
+            - name: Deploy to Github Pages
+              uses: crazy-max/ghaction-github-pages@master
+              if: success()
+              with:
+                  target_branch: gh-pages
+                  build_dir: target/doc
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_PAT: ${{ secrets.ACCESS_TOKEN }}
