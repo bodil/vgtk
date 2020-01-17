@@ -1,7 +1,10 @@
 #![cfg_attr(can_show_location_of_runtime_parse_error, feature(proc_macro_span))]
 #![deny(rust_2018_idioms, unsafe_code)]
 
-use proc_macro;
+#[allow(clippy::useless_attribute)]
+#[allow(rust_2018_idioms)]
+extern crate proc_macro;
+
 use proc_macro_hack::proc_macro_hack;
 
 mod context;
