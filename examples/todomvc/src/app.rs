@@ -11,7 +11,7 @@ use strum_macros::{Display, EnumIter};
 
 use crate::about::AboutDialog;
 use crate::items::{Item, Items};
-#[cfg(feature = "box-layout")]
+#[cfg(not(feature = "grid-layout"))]
 use crate::radio::Radio;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Display, EnumIter)]
@@ -63,7 +63,7 @@ impl Model {
         }
     }
 
-    #[cfg(feature = "box-layout")]
+    #[cfg(not(feature = "grid-layout"))]
     fn main_panel(&self) -> VNode<Model> {
         gtk! {
             <Box spacing=10 orientation=Orientation::Vertical>
