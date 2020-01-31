@@ -11,7 +11,6 @@ use strum_macros::{Display, EnumIter};
 
 use crate::about::AboutDialog;
 use crate::items::{Item, Items};
-#[cfg(not(feature = "grid-layout"))]
 use crate::radio::Radio;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Display, EnumIter)]
@@ -63,7 +62,6 @@ impl Model {
         }
     }
 
-    #[cfg(not(feature = "grid-layout"))]
     fn main_panel(&self) -> VNode<Model> {
         gtk! {
             <Box spacing=10 orientation=Orientation::Vertical>
@@ -103,65 +101,6 @@ impl Model {
                     }
                 </Box>
             </Box>
-        }
-    }
-
-    #[cfg(feature = "grid-layout")]
-    fn main_panel(&self) -> VNode<Model> {
-        gtk! {
-            <Grid row_spacing=10 column_spacing=10>
-                // Row 0
-                <Button image="edit-select-all" relief=ReliefStyle::Half
-                        always_show_image=true on clicked=|_| Msg::ToggleAll/>
-                <Entry placeholder_text="What needs to be done?"
-                       Grid::left=1
-                       hexpand=true
-                       on activate=|entry| {
-                           let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
-                           entry.select_region(0, label.len() as i32);
-                           Msg::Add {
-                               item: label
-                           }
-                       } />
-
-                // Row 1
-                <ScrolledWindow Grid::top=1 Grid::width=2 hexpand=true vexpand=true>
-                    <ListBox selection_mode=SelectionMode::None>
-                        {
-                            self.filter(self.filter).enumerate()
-                                .map(|(index, item)| item.render(index))
-                        }
-                    </ListBox>
-                </ScrolledWindow>
-
-                // Row 2
-                <Grid Grid::top=2 Grid::width=2 hexpand=true>
-                    <Label label=self.left_label() halign=Align::Start/>
-                    <Box orientation=Orientation::Horizontal spacing=10 halign=Align::Center hexpand=true Grid::left=1>
-                        <ToggleButton label="All"
-                                      active=self.filter == Filter::All
-                                      on toggled=|_| Msg::Filter { filter: Filter::All }/>
-                        <ToggleButton label="Active"
-                                      active=self.filter == Filter::Active
-                                      on toggled=|_| Msg::Filter { filter: Filter::Active }/>
-                        <ToggleButton label="Completed"
-                                      active=self.filter == Filter::Completed
-                                      on toggled=|_| Msg::Filter { filter: Filter::Completed }/>
-                    </Box>
-                    {
-                        if self.filter(Filter::Completed).count() > 0 {
-                            (gtk!{
-                                 <Button label="Clear completed"
-                                         Grid::left=2
-                                         halign=Align::End
-                                         on clicked=|_| Msg::ClearCompleted/>
-                            }).into_iter()
-                        } else {
-                            VNode::empty()
-                        }
-                    }
-                </Grid>
-            </Grid>
         }
     }
 }
