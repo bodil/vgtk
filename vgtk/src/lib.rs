@@ -2,7 +2,19 @@
 //!
 //! ## Overview
 //!
+//! `vgtk` is a GUI framework built on [GTK] using what might be
+//! called the "Model-View-Update" pattern, as popularised in [Elm]
+//! and [Redux], in addition to a component model similar to [React].
+//! Its primary inspiration is the [Yew] web framework for Rust, from
+//! which it inherits most of its more specific ideas.
 //!
+//! To facilitate writing GTK UIs in a declarative style, `vgtk` implements
+//! an algorithm similar to DOM diffing, but for GTK's widget tree, which
+//! has turned out to be considerably less trivial than diffing a well structured
+//! tree like the DOM, but as a first draft at least it gets the job done.
+//!
+//! More importantly, `vgtk` also provides the [`gtk!`][vgtk::gtk!] macro
+//! allowing you to write your declarative UI in a syntax very similar to [JSX].
 //!
 //! ## Show Me!
 //!
@@ -59,8 +71,327 @@
 //! }
 //! ```
 //!
+//! ## Building A Component
+//!
+//! A component in `vgtk` is something which implements the [`Component`][Component] trait,
+//! providing the two crucial methods [`view`][Component::view] and [`update`][Component::update].
+//! Your top level component should have a [`view`][Component::view] function which returns
+//! a GTK [`Application`][Application] object, or, rather, a "virtual DOM" tree which builds one.
+//!
+//! The [`view`][Component::view] function's job is to examine the current state of the component
+//! (usually contained within the type of the [`Component`][Component] itself) and return a UI tree
+//! which reflects it. This is its only job, and however much you might be tempted to, it must not do
+//! anything else, especially anything that might block the thread or cause a delayed result.
+//!
+//! Responding to user interaction, or other external inputs, is the job of the
+//! [`update`][Component::update] function. This takes an argument of the type
+//! [`Component::Message`][Component::Message] and updates the component's state according to the
+//! contents of the message. This is the only place you're allowed to modify the contents of your
+//! component, and every way to change it should be expressed as a message you can send to
+//! your [`update`][Component::update] function.
+//!
+//! [`update`][Component::update] returns an [`UpdateAction`][UpdateAction] describing one of three
+//! outcomes: either, [`None`][UpdateAction::None], meaning nothing significant changed as a result
+//! of the message and we don't need to update the UI, or [`Render`][UpdateAction::Render], meaning
+//! you made a change which should be reflected in the UI, causing the framework to call your
+//! [`view`][Component::view] method and re-render the UI. Finally, you can also return
+//! [`Defer`][UpdateAction::Defer] with a [`Future`][Future] in case you need to
+//! do some I/O or a similar asynchronous task - the [`Future`][Future] should resolve to a
+//! [`Component::Message`][Component::Message] which will be passed along to [`update`][Component::update]
+//! when the [`Future`][Future] resolves.
+//!
+//! ## Signal Handlers
+//!
+//! Other than [`UpdateAction::Defer`][UpdateAction::Defer], where do these messages come from?
+//! Usually, they will be triggered by user interaction with the UI. Using the [`gtk!`][vgtk::gtk!]
+//! macro, you can attach signal handlers to
+//! [GTK signals](https://developer.gnome.org/gobject/stable/howto-signals.html)
+//! which respond to a signal by sending a message to the current component.
+//!
+//! For instance, a GTK [`Button`][Button] has a [`clicked`][Button::connect_clicked] signal which is
+//! triggered when the user clicks on the button, as the name suggests. Looking at the
+//! [`connect_clicked`][Button::connect_clicked] method, we see that it takes a single `&Self` argument,
+//! representing the button being clicked. In order to listen to this signal, we attach a closure
+//! with a similar function signature to the button using the `on` syntax:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode, Component};
+//! # use vgtk::lib::gtk::{Button, ButtonExt};
+//! # #[derive(Clone, Debug)] enum Message { ButtonWasClicked }
+//! # #[derive(Default)] struct Comp;
+//! # impl Component for Comp { type Message = Message; type Properties = (); fn view(&self) -> VNode<Self> {
+//! gtk! {
+//!     <Button label="Click me" on clicked=|_| Message::ButtonWasClicked />
+//! }
+//! # }}
+//! ```
+//!
+//! This will cause a `Message::ButtonWasClicked` message to be sent to your component's
+//! [`update`][Component::update] function when the user clicks the button.
+//!
+//! ## The `gtk!` Syntax
+//!
+//! The syntax for the [`gtk!`][vgtk::gtk!] macro is similar to [JSX], but with a number of necessary
+//! extensions.
+//!
+//! A GTK widget (or, in fact, any GLib object, but most objects require widget children) can be
+//! constructed using an element tag. Attributes on that tag correspond to `get_*` and `set_*` methods
+//! on the GTK widget. Thus, to construct a GTK [`Button`][Button] calling [`set_label`][Button::set_label]
+//! to set its label:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode};
+//! # use vgtk::lib::gtk::{Button, ButtonExt};
+//! # fn view() -> VNode<()> {
+//! gtk! {
+//!     <Button label="Click me" />
+//! }
+//! # }
+//! ```
+//!
+//! A GTK container is represented by an open/close element tag, with child tags representing its
+//! children. If a widget has a constructor that takes arguments, you can use that constructor in place
+//! of the element's tag name. Here's how to construct a [`Box`][Box] with a [`Button`][Button] inside it,
+//! showing off the constructor syntax as well as how to add child widgets:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
+//! # fn view() -> VNode<()> {
+//! gtk! {
+//!     <Box::new(Orientation::Horizontal, 10)>
+//!         <Button label="Left click" />
+//!         <Button label="Right click" />
+//!     </Box>
+//! }
+//! # }
+//! ```
+//!
+//! Sometimes, a widget has a property which must be set through its parent, such as a child's
+//! `expand` and `fill` properties inside a [`Box`][Box]. These properties correspond to
+//! `set_child_*` and `get_child_*` methods on the parent, and are represented as attributes
+//! on the child with the parent's type as a namespace, like this:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
+//! # fn view() -> VNode<()> {
+//! gtk! {
+//!     <Box::new(Orientation::Horizontal, 10)>
+//!         <Button label="Click me" Box::expand=true Box::fill=true />
+//!     </Box>
+//! }
+//! # }
+//! ```
+//!
+//! The final addition to the attribute syntax pertains to when you need to qualify an
+//! ambiguous method name. For instance, a [`MenuButton`][MenuButton] implements both
+//! [`WidgetExt`][WidgetExt] and [`MenuButtonExt`][MenuButtonExt], both of which contains
+//! a `set_direction` method. In order to let the compiler know which one you mean, you
+//! can qualify it with an `@` and the type name, like this:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode};
+//! # use vgtk::lib::gtk::{MenuButton, MenuButtonExt, WidgetExt, ArrowType, TextDirection};
+//! # fn view1() -> VNode<()> { gtk!{
+//! <MenuButton @MenuButtonExt::direction=ArrowType::Down />
+//! # }} fn view2() -> VNode<()> { gtk! {
+//! <MenuButton @WidgetExt::direction=TextDirection::Ltr />
+//! # }}
+//! ```
+//!
+//! ### Interpolation
+//!
+//! The `gtk!` macro's parser tries to be smart about recognising Rust expressions as attribute
+//! values, but it's not perfect. If the parser chokes on some particularly complicated Rust
+//! expression, you can always wrap an attribute's value in a `{}` block, as per [JSX].
+//!
+//! This curly bracket syntax is also used to dynamically insert child widgets into a tree.
+//! You can insert a code block in place of a child widget, which should return an iterator
+//! of widgets that will be appended by the macro when rendering the virtual tree.
+//!
+//! For instance, to dynamically generate a series of buttons, you can do this:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
+//! # fn view() -> VNode<()> {
+//! gtk! {
+//!     <Box::new(Orientation::Horizontal, 10)>
+//!         {
+//!             (1..=5).map(|counter| {
+//!                 gtk! { <Button label=format!("Button #{}", counter) /> }
+//!             })
+//!         }
+//!     </Box>
+//! }
+//! # }
+//! ```
+//!
+//! ## Subcomponents
+//!
+//! Components are designed to be composable, so you can place one component inside
+//! another. The `gtk!` syntax for that looks like this:
+//!
+//! ```rust,ignore
+//! <@Subcomponent attribute_1="hello" attribute_2=1337 />
+//! ```
+//!
+//! The subcomponent name (prefixed by `@` to distinguish it from a GTK object) maps to
+//! the type of the component, and each attribute maps directly to a property on its
+//! [`Component::Properties`][Component::Properties] type. When a subcomponent is constructed,
+//! the framework calls its [`create`][Component::create] method with the property object constructed
+//! from its attributes as an argument.
+//!
+//! A subcomponent needs to implement [`create`][Component::create] and [`change`][Component::change]
+//! in addition to [`update`][Component::update] and [`view`][Component::view]. The default implementations
+//! of these methods will panic with a message telling you to implement them.
+//!
+//! Subcomponents do *not* support signal handlers, because a component is not a GTK object. You'll have
+//! to use the [`Callback`][Callback] type to communicate between a subcomponent and its parent.
+//!
+//! This is what a very simple button subcomponent might look like:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode, UpdateAction, Component, Callback};
+//! # use vgtk::lib::gtk::{Button, ButtonExt};
+//! #[derive(Clone, Debug, Default)]
+//! pub struct MyButton {
+//!     pub label: String,
+//!     pub on_clicked: Option<Callback<()>>,
+//! }
+//!
+//! #[derive(Clone, Debug)]
+//! pub enum MyButtonMessage {
+//!     Clicked
+//! }
+//!
+//! impl Component for MyButton {
+//!     type Message = MyButtonMessage;
+//!     type Properties = Self;
+//!
+//!     fn create(props: Self) -> Self {
+//!         props
+//!     }
+//!
+//!     fn change(&mut self, props: Self) -> UpdateAction<Self> {
+//!         *self = props;
+//!         UpdateAction::Render
+//!     }
+//!
+//!     fn update(&mut self, msg: Self::Message) -> UpdateAction<Self> {
+//!         match msg {
+//!             MyButtonMessage::Clicked => {
+//!                 if let Some(ref callback) = self.on_clicked {
+//!                     callback.send(());
+//!                 }
+//!             }
+//!         }
+//!         UpdateAction::None
+//!     }
+//!
+//!     fn view(&self) -> VNode<Self> {
+//!         gtk! {
+//!             <Button label=self.label.clone() on clicked=|_| MyButtonMessage::Clicked />
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! Note that because this component doesn't have any state other than its properties, we
+//! just make `Self::Properties` equal to `Self`, there's no need to keep two identical types
+//! around for this purpose. Note also that the callback passes a value of type `()`, because
+//! the `clicked` signal doesn't contain any useful information besides the fact that it's
+//! being sent.
+//!
+//! This is how you'd use this subcomponent with a callback inside the [`view`][Component::view]
+//! method of a parent component:
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode, UpdateAction, Component, Callback};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation, Label, LabelExt};
+//! #[derive(Clone, Debug, Default)]
+//! # pub struct MyButton {
+//! #     pub label: String,
+//! #     pub on_clicked: Option<Callback<()>>,
+//! # }
+//! # impl Component for MyButton {
+//! #     type Message = ();
+//! #     type Properties = Self;
+//! #     fn view(&self) -> VNode<Self> { todo!() }
+//! # }
+//! # #[derive(Clone, Debug)] enum ParentMessage { ButtonClicked }
+//! # #[derive(Default)] struct Parent;
+//! # impl Component for Parent { type Message = ParentMessage; type Properties = ();
+//! fn view(&self) -> VNode<Self> {
+//!     gtk! {
+//!         <Box::new(Orientation::Horizontal, 10)>
+//!             <Label label="Here is a button:" />
+//!             <@MyButton label="Click me!" on_clicked=|_| ParentMessage::ButtonClicked />
+//!         </Box>
+//!     }
+//! }
+//! # }
+//! ```
+//!
+//! Note that the return type of the `on_clicked` callback is the message type of the parent
+//! component - when the subcomponent is constructed, the parent component will wire any callback
+//! up to its [`update`][Component::update] function for you automatically with a bit of `unsafe`
+//! trickery, so that the subcomponent doesn't have to carry the information about what type of
+//! parent component it lives within inside its type signature. It'll just work, with nary a
+//! profunctor in sight.
+//!
+//! ## Work In Progress
+//!
+//! While this framework is currently sufficiently usable that we can implement [TodoMVC] in it, there
+//! are likely to be a lot of rough edges still to be uncovered. In particular, a lot of properties on
+//! GTK objects don't map cleanly to `get_*` and `set_*` methods in the [Gtk-rs] mappings, as required
+//! by the `gtk!` macro, which has necessitated the collection of hacks in [`vgtk::ext`][vgtk::ext].
+//! There are likely many more to be found in widgets as yet unused.
+//!
+//! As alluded to previously, the diffing algorithm is also complicated by the irregular structure of the
+//! GTK widget tree. Not all child widgets are added through the [`Container`][Container] API, and while
+//! most of the exceptions are already implemented, there will be more. There's also a lot of room yet
+//! for optimisation in the diffing algorithm itself, which is currently not nearly as clever as the state
+//! of the art in the DOM diffing world.
+//!
+//! Not to mention the documentation effort.
+//!
+//! In short, [pull requests](https://github.com/bodil/vgtk/pulls) are welcome.
+//!
 //! [GTK]: https://www.gtk.org/
 //! [Gtk-rs]: https://gtk-rs.org/
+//! [Elm]: https://elm-lang.org/
+//! [React]: https://reactjs.org/
+//! [Redux]: https://redux.js.org/
+//! [Yew]: https://yew.rs/
+//! [JSX]: https://reactjs.org/docs/introducing-jsx.html
+//! [TodoMVC]: http://todomvc.com/
+//! [vgtk::gtk!]: macro.gtk.html
+//! [vgtk::ext]: ext/index.html
+//! [Component]: trait.Component.html
+//! [Component::view]: trait.Component.html#tymethod.view
+//! [Component::update]: trait.Component.html#method.update
+//! [Component::create]: trait.Component.html#method.create
+//! [Component::change]: trait.Component.html#method.change
+//! [Component::Message]: trait.Component.html#associatedtype.Message
+//! [Component::Properties]: trait.Component.html#associatedtype.Properties
+//! [Callback]: struct.Callback.html
+//! [UpdateAction]: enum.UpdateAction.html
+//! [UpdateAction::None]: enum.UpdateAction.html#variant.None
+//! [UpdateAction::Render]: enum.UpdateAction.html#variant.Render
+//! [UpdateAction::Defer]: enum.UpdateAction.html#variant.Defer
+//! [Application]: https://gtk-rs.org/docs/gtk/struct.Application.html
+//! [Button]: https://gtk-rs.org/docs/gtk/struct.Button.html
+//! [Button::connect_clicked]: https://gtk-rs.org/docs/gtk/trait.ButtonExt.html#tymethod.connect_clicked
+//! [Button::set_label]: https://gtk-rs.org/docs/gtk/trait.ButtonExt.html#tymethod.set_label
+//! [Box]: https://gtk-rs.org/docs/gtk/struct.Box.html
+//! [Box::new]: https://gtk-rs.org/docs/gtk/struct.Box.html#method.new
+//! [Container]: https://gtk-rs.org/docs/gtk/struct.Container.html
+//! [MenuButton]: https://gtk-rs.org/docs/gtk/struct.MenuButton.html
+//! [MenuButtonExt]: https://gtk-rs.org/docs/gtk/trait.MenuButtonExt.html
+//! [WidgetExt]: https://gtk-rs.org/docs/gtk/trait.WidgetExt.html
+//! [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
 
 #![forbid(rust_2018_idioms)]
 #![deny(nonstandard_style, unsafe_code)]

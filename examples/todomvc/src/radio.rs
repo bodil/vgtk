@@ -54,7 +54,7 @@ where
         UpdateAction::Render
     }
 
-    fn view(&self) -> VNode<Radio<Enum>> {
+    fn view(&self) -> VNode<Self> {
         gtk! {
             <Box orientation=Orientation::Horizontal spacing=10>
                 { Enum::iter().map(|label| {
