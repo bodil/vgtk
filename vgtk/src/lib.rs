@@ -71,6 +71,33 @@
 //! }
 //! ```
 //!
+//! ## Prerequisites
+//!
+//! The `vgtk` documentation assumes you already have a passing familiarity with [GTK] and
+//! its [Rust bindings][Gtk-rs]. It makes little to no effort to explain how [GTK] works or
+//! to catalogue which widgets are available. Please refer to the [Gtk-rs] documentation or
+//! that of [GTK] proper for this.
+//!
+//! ## The Component Model
+//!
+//! The core idea of `vgtk` is the [`Component`][Component]. A component, in practical terms, is a
+//! composable tree of Gtk widgets, often a window, reflecting a block of application state. You
+//! can write your application as a single component, but you can also embed a component inside
+//! another component, which makes sense for parts of your UI you tend to repeat, or just for
+//! making an easier to use interface for a common Gtk widget type.
+//!
+//! Your application starts with a component that manages an [`Application`][Application] object.
+//! This [`Application`][Application] in turn will have one or more [`Window`][Window]s attached
+//! to it, either directly inside the component or as subcomponents. [`Window`][Window]s in turn
+//! contain widget trees.
+//!
+//! You can think of a component as an MVC system, if that's something you're familiar with: it
+//! contains some application state (the Model), a method for rendering that state into a tree of
+//! GTK widgets (the View) and a method for updating that state based on external inputs like
+//! user interaction (the Controller). You can also think of it as mapping almost directly to a
+//! [React] component, if you're more familiar with that, even down to the way it interacts with
+//! the [JSX] syntax.
+//!
 //! ## Building A Component
 //!
 //! A component in `vgtk` is something which implements the [`Component`][Component] trait,
@@ -112,7 +139,10 @@
 //! triggered when the user clicks on the button, as the name suggests. Looking at the
 //! [`connect_clicked`][Button::connect_clicked] method, we see that it takes a single `&Self` argument,
 //! representing the button being clicked. In order to listen to this signal, we attach a closure
-//! with a similar function signature to the button using the `on` syntax:
+//! with a similar function signature to the button using the `on` syntax. The closure always takes the
+//! same arguments as the `connect_*` callback, but instead of returning nothing it returns a message of
+//! the component's message type. This message will be passed to the component's
+//! [`update`][Component::update] method by the framework.
 //!
 //! ```rust,no_run
 //! # use vgtk::{gtk, VNode, Component};
@@ -341,6 +371,17 @@
 //! parent component it lives within inside its type signature. It'll just work, with nary a
 //! profunctor in sight.
 //!
+//! ## Logging
+//!
+//! `vgtk` uses the [`log`][log] crate for debug output. You'll need to provide your own logger for this;
+//! the example projects show how to set up [`pretty_env_logger`][pretty_env_logger] for logging to the
+//! standard output. To enable it, set the `RUST_LOG` environment variable to `debug` when running the
+//! examples. You can also use the value `vgtk=debug` to turn on debug output only for `vgtk`, if you have
+//! other components using the logging framework. At log level `debug`, it will log the component messages
+//! received by your components, which can be extremely helpful when trying to track down a bug
+//! in your component's interactions. At log level `trace`, you'll also get a lot of `vgtk` internal
+//! information that's likely only useful if you're debugging the framework.
+//!
 //! ## Work In Progress
 //!
 //! While this framework is currently sufficiently usable that we can implement [TodoMVC] in it, there
@@ -367,6 +408,8 @@
 //! [Yew]: https://yew.rs/
 //! [JSX]: https://reactjs.org/docs/introducing-jsx.html
 //! [TodoMVC]: http://todomvc.com/
+//! [log]: https://crates.io/crates/log
+//! [pretty_env_logger]: https://crates.io/crates/pretty_env_logger
 //! [vgtk::gtk!]: macro.gtk.html
 //! [vgtk::ext]: ext/index.html
 //! [Component]: trait.Component.html
@@ -391,6 +434,7 @@
 //! [MenuButton]: https://gtk-rs.org/docs/gtk/struct.MenuButton.html
 //! [MenuButtonExt]: https://gtk-rs.org/docs/gtk/trait.MenuButtonExt.html
 //! [WidgetExt]: https://gtk-rs.org/docs/gtk/trait.WidgetExt.html
+//! [Window]: https://gtk-rs.org/docs/gtk/struct.Window.html
 //! [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
 
 #![forbid(rust_2018_idioms)]
@@ -413,6 +457,10 @@ pub mod vnode;
 use proc_macro_hack::proc_macro_hack;
 
 /// Generate a virtual component tree.
+///
+/// See the [top level documentation][toplevel] for a description of its syntax.
+///
+/// [toplevel]: index.html
 #[proc_macro_hack(support_nested)]
 pub use vgtk_macros::gtk;
 
@@ -552,6 +600,23 @@ pub fn quit() {
 /// the type of the emitted value (the second argument to the callback
 /// `connect_signal_name` takes). It will produce `Err(Canceled)` if the object
 /// is destroyed before the signal is emitted.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use vgtk::on_signal;
+/// # use vgtk::lib::gtk::{AboutDialog, AboutDialogExt, DialogExt, ResponseType, WidgetExt};
+/// # async {
+/// let dialog = AboutDialog::new();
+/// dialog.set_program_name("Frobnicator");
+/// dialog.show();
+/// if on_signal!(dialog, connect_response).await == Ok(ResponseType::Accept) {
+///     println!("Dialog accepted");
+/// } else {
+///     println!("Dialog not accepted");
+/// }
+/// # };
+/// ```
 #[macro_export]
 macro_rules! on_signal {
     ($object:expr, $connect:ident) => {
@@ -565,7 +630,7 @@ macro_rules! on_signal {
                     if notify.send(value).is_ok() {}
                 }
                 if let Some(handler) = lock.0.take() {
-                    obj.disconnect(handler);
+                    $crate::lib::glib::ObjectExt::disconnect(obj, handler);
                 }
             });
             state_outer.lock().unwrap().0 = Some(id);
@@ -583,6 +648,25 @@ macro_rules! on_signal {
 /// The output type of the stream is the type of the emitted value (the second
 /// argument to the callback `connect_signal_name` takes). The stream will
 /// terminate when the object it's connected to is destroyed.
+///
+/// Note that this only works with `connect_*` callbacks which take two
+/// arguments. The second argument will be the contents of the stream. The first
+/// argument, normally a reference to the signal's sender, is ignored.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use futures::{future, stream::StreamExt};
+/// # use vgtk::stream_signal;
+/// # use vgtk::lib::gtk::{AboutDialog, AboutDialogExt, DialogExt, ResponseType, WidgetExt};
+/// let dialog = AboutDialog::new();
+/// dialog.set_program_name("Frobnicator");
+/// dialog.show();
+/// stream_signal!(dialog, connect_response).for_each(|response| {
+///     println!("Dialog response: {:?}", response);
+///     future::ready(())
+/// });
+/// ```
 #[macro_export]
 macro_rules! stream_signal {
     ($object:expr, $connect:ident) => {{

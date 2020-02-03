@@ -12,7 +12,9 @@ pub use property::VProperty;
 
 /// A node in the virtual component tree representing a `Component` or a Gtk widget.
 ///
-/// Don't attempt to construct these directly. Use the `gtk!` macro instead.
+/// Don't attempt to construct these directly. Use the [`gtk!`][gtk!] macro instead.
+///
+/// [gtk!]: macro.gtk.html
 pub enum VNode<Model: Component> {
     Object(VObject<Model>),
     Component(VComponent<Model>),

@@ -27,7 +27,8 @@ pub enum UpdateAction<C: Component> {
     None,
     /// Re-render the widget tree.
     Render,
-    /// Run an async task and update again when it completes.
+    /// Run an async task and update again when it completes, passing the message
+    /// returned from the `Future` to `Component::update()`.
     ///
     /// You should use `UpdateAction::defer()` to construct this, rather than
     /// trying to box up your `Future` yourself.
@@ -42,9 +43,29 @@ impl<C: Component> UpdateAction<C> {
 }
 
 /// This is the trait your UI components should implement.
+///
+/// You must always provide `Message` and `Properties` types, and the `view()` method.
+/// `Properties` only makes sense when used as a subcomponent, and should be set to the
+/// unit type `()` for your top level component.
+///
+/// A default implementation for `update` is provided which does nothing and always
+/// returns `UpdateAction::None`. You will probably want to reimplement this.
+///
+/// You don't have to implement `create` and `change` for a top level component, but
+/// you'll have to implement them for a subcomponent. The default implementation for
+/// `create` just constructs the default value for your component, ignoring its
+/// properties entirely (which is what you want for a top level component) and the
+/// default `change` will panic to remind you that you need to implement it.
+///
+/// A sensible pattern for a subcomponent without local state is to make
+/// `Self::Properties = Self`. `create` can then just return its input argument,
+/// and `change` could be as simple as `*self = props; UpdateAction::Render`, though
+/// you might want to compare the input with the current state if possible and return
+/// `UpdateAction::Render` only when they're different.
 pub trait Component: Default + Unpin {
     /// The type of messages you can send to the `Component::update()` function.
     type Message: Clone + Send + Debug + Unpin;
+
     /// A struct type which holds the properties for your `Component`.
     ///
     /// The `gtk!` macro will construct this from the attributes on the
@@ -52,6 +73,14 @@ pub trait Component: Default + Unpin {
     ///
     /// This is not relevant and should be set to `()` if you're writing a top
     /// level component.
+    ///
+    /// Note: if you need to emit signals from a subcomponent, please see the
+    /// documentation for [`Callback`][Callback]. Subcomponents do not support the
+    /// `on signal` syntax, as they aren't GTK objects and therefore can't emit signals,
+    /// and the convention is to use a [`Callback`][Callback] property named `on_signal`
+    /// instead.
+    ///
+    /// [Callback]: struct.Callback.html
     type Properties: Clone + Default;
 
     /// Process a `Component::Message` and update the state accordingly.
@@ -71,28 +100,47 @@ pub trait Component: Default + Unpin {
 
     /// Construct a new `Component` given a `Component::Properties` object.
     ///
-    /// This will never be called to construct a top level component. These will
-    /// always be constructed using `Default::default()`.
+    /// The default implementation ignores the `Properties` argument and constructs
+    /// the component using [`Default::default()`][default]. This is what you want
+    /// for a top level component, and almost certainly not what you want for a
+    /// subcomponent.
+    ///
+    /// [default]: https://doc.rust-lang.org/std/default/trait.Default.html
     fn create(_props: Self::Properties) -> Self {
-        Self::default()
+        Default::default()
     }
 
     /// Update a `Component`'s properties.
+    ///
+    /// This method will never be called on a top level component. Its default
+    /// implementation panics with a message telling you to implement it for
+    /// your subcomponent.
     fn change(&mut self, _props: Self::Properties) -> UpdateAction<Self> {
         unimplemented!("add a Component::change() implementation")
     }
 
     /// This method is called when the `Component` becomes visible to the user.
+    ///
+    /// The default implementation does nothing. You can reimplement it if you
+    /// need to be aware of when this happens.
     fn mounted(&mut self) {}
 
-    /// This method is called when the `Component` becomes hidden or is
+    /// This method is called just before the `Component` becomes hidden or is
     /// removed entirely.
+    ///
+    /// The default implementation does nothing. You can reimplement it if you
+    /// need to be aware of when this happens.
     fn unmounted(&mut self) {}
 
     /// Build a `VNode` tree to represent your UI.
     ///
     /// This is called whenever the `Component` needs to re-render, and its UI
     /// state will be updated to reflect the `VNode` tree.
+    ///
+    /// You'll generally want to use the [`gtk!`][gtk!] macro to build your `VNode`
+    /// tree.
+    ///
+    /// [gtk!]: macro.gtk.html
     fn view(&self) -> VNode<Self>;
 }
 

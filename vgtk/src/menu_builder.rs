@@ -1,11 +1,32 @@
 use gio::{Menu, MenuItem};
 
-/// Makes a `gtk::Menu` for you.
+/// Makes a [`gtk::Menu`][Menu] for you.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use vgtk::menu;
+/// let menu_bar = menu()
+///     .section_label("File",
+///         menu()
+///             .item("Open...", "win.open")
+///             .item("Save", "win.save")
+///             .item("Quit", "app.quit")
+///     )
+///     .section_label("Help",
+///         menu()
+///             .item("About...", "app.about")
+///     ).build();
+/// ```
+///
+/// [Menu]: https://gtk-rs.org/docs/gtk/struct.Menu.html
 pub struct MenuBuilder {
     menu: Menu,
 }
 
-/// Construct a `MenuBuilder`.
+/// Construct a [`MenuBuilder`][MenuBuilder].
+///
+/// [MenuBuilder]: struct.MenuBuilder.html
 pub fn menu() -> MenuBuilder {
     MenuBuilder { menu: Menu::new() }
 }
