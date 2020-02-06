@@ -10,11 +10,12 @@ pub use gobject::VObject;
 pub use handler::VHandler;
 pub use property::VProperty;
 
-/// A node in the virtual component tree representing a `Component` or a Gtk widget.
+/// A node in the virtual component tree representing a [`Component`][Component] or a Gtk widget.
 ///
 /// Don't attempt to construct these directly. Use the [`gtk!`][gtk!] macro instead.
 ///
 /// [gtk!]: macro.gtk.html
+/// [Component]: trait.Component.html
 pub enum VNode<Model: Component> {
     Object(VObject<Model>),
     Component(VComponent<Model>),
@@ -39,12 +40,47 @@ impl<Model: Component> VNode<Model> {
     }
 }
 
-/// An iterator over zero or one `VNode`s.
+/// An iterator over zero or one [`VNode`][VNode]s.
 ///
-/// A `VNode` implements `IntoIterator` for this, so you can return a single
-/// `VNode` in a code block in the `gtk!` macro without needing to convert it.
+/// A [`VNode`][VNode] implements [`IntoIterator`][IntoIterator] to build a `VNodeIterator`, so
+/// you can return a single [`VNode`][VNode] in a code block in the [`gtk!`][gtk!] macro without
+/// needing to convert it.
 ///
-/// If you need to return an empty list of `VNode`s, use `VNode::empty()`.
+/// If you need to return an empty list of [`VNode`][VNode]s, use [`VNode::empty()`][empty].
+///
+/// This iterator mainly exists to enable the pattern of conditionally returning a node from an
+/// if expression, because the empty iterator and the single node iterator both have the same type,
+/// unlike if you attempted to return [`std::iter::once()`][iter::once] and
+/// [`std::iter::empty()`][iter::empty], which would result in a type error.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use vgtk::{gtk, VNode};
+/// # use vgtk::lib::gtk::{Label, LabelExt, Box, BoxExt, Orientation};
+/// # fn should_render_label() -> bool { true }
+/// # fn view() -> VNode<()> {
+/// let render_label: bool = should_render_label();
+/// gtk! {
+///     <Box::new(Orientation::Vertical, 10)>
+///         {
+///             if render_label {
+///                 (gtk! { <Label label="It's a me, Label!" /> }).into_iter()
+///             } else {
+///                 VNode::empty()
+///             }
+///         }
+///     </Box>
+/// }
+/// # }
+/// ```
+///
+/// [gtk!]: macro.gtk.html
+/// [VNode]: enum.VNode.html
+/// [empty]: enum.VNode.html#method.empty
+/// [IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
+/// [iter::once]: https://doc.rust-lang.org/std/iter/fn.once.html
+/// [iter::empty]: https://doc.rust-lang.org/std/iter/fn.empty.html
 pub struct VNodeIterator<Model: Component> {
     node: Option<VNode<Model>>,
 }
@@ -65,10 +101,13 @@ impl<Model: Component> IntoIterator for VNode<Model> {
 }
 
 impl<Model: Component> VNode<Model> {
-    /// Make an empty iterator of `VNode`s.
+    /// Make an empty iterator of [`VNode`][VNode]s.
     ///
-    /// Use this inside a code block in the `gtk!` macro to return an empty list
+    /// Use this inside a code block in the [`gtk!`][gtk!] macro to return an empty list
     /// of child nodes.
+    ///
+    /// [gtk!]: macro.gtk.html
+    /// [VNode]: enum.VNode.html
     pub fn empty() -> VNodeIterator<Model> {
         VNodeIterator { node: None }
     }

@@ -1,7 +1,9 @@
-//! Helper traits for adapting the GTK API to the `gtk!` macro's mindset.
+//! Helper traits for adapting the GTK API to the [`gtk!`][gtk!] macro's mindset.
 //!
 //! It is generally a good idea to `use vgtk::ext::*;` wherever you're using the
-//! `gtk!` macro.
+//! [`gtk!`][gtk!] macro.
+//!
+//! [gtk!]: ../macro.gtk.html
 
 #![allow(missing_docs)]
 
@@ -19,13 +21,20 @@ use log::trace;
 pub mod grid;
 pub use grid::GridExtHelpers;
 
-/// Helper trait for `Application`.
+/// Helper trait for [`Application`][Application].
+///
+/// [Application]: ../../gtk/struct.Application.html
 pub trait ApplicationHelpers: GtkApplicationExt {
-    /// Construct a new `Application` and panic if it fails.
+    /// Construct a new [`Application`][Application] and panic if it fails.
     ///
-    /// This is like `Application::new`, but returns an `Application` instead of
-    /// an `Option<Application>`, so you can use it as a constructor in the `gtk!`
+    /// This is like [`Application::new`][new], but returns an [`Application`][Application] instead of
+    /// an [`Option`][Option]`<`[`Application`][Application]`>`, so you can use it as a constructor in the [`gtk!`][gtk!]
     /// macro.
+    ///
+    /// [gtk!]: ../macro.gtk.html
+    /// [Application]: ../../gtk/struct.Application.html
+    /// [new]: ../../gtk/struct.Application.html#method.new
+    /// [Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     fn new_unwrap(application_id: Option<&str>, flags: ApplicationFlags) -> Application {
         Application::new(application_id, flags).expect("unable to create Application object")
     }
@@ -58,7 +67,9 @@ pub trait ApplicationHelpers: GtkApplicationExt {
 
 impl<A> ApplicationHelpers for A where A: GtkApplicationExt {}
 
-/// Helper trait for `ApplicationWindow`.
+/// Helper trait for [`ApplicationWindow`][ApplicationWindow].
+///
+/// [ApplicationWindow]: ../../gtk/struct.ApplicationWindow.html
 pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Window> {
     fn get_child_accels<P: IsA<Action>>(&self, action: &P) -> Vec<GString> {
         let app = self
@@ -111,7 +122,9 @@ pub trait ApplicationWindowHelpers: ApplicationWindowExt + GtkWindowExt + IsA<Wi
 
 impl<A> ApplicationWindowHelpers for A where A: ApplicationWindowExt + GtkWindowExt + IsA<Window> {}
 
-/// Helper trait for `Window`.
+/// Helper trait for [`Window`][Window].
+///
+/// [Window]: ../../gtk/struct.Window.html
 pub trait WindowExtHelpers: GtkWindowExt {
     fn get_default_height(&self) -> i32 {
         self.get_property_default_height()
@@ -156,7 +169,9 @@ pub trait WindowExtHelpers: GtkWindowExt {
 
 impl<A> WindowExtHelpers for A where A: GtkWindowExt {}
 
-/// Helper trait for `Box`.
+/// Helper trait for [`Box`][Box].
+///
+/// [Box]: ../../gtk/struct.Box.html
 pub trait BoxExtHelpers: BoxExt {
     fn get_child_center_widget(&self, _child: &Object) -> bool {
         // Always compare true, it's all taken care of in add_child().
@@ -170,7 +185,9 @@ pub trait BoxExtHelpers: BoxExt {
 
 impl<A> BoxExtHelpers for A where A: BoxExt {}
 
-/// Helper trait for `Image`.
+/// Helper trait for [`Image`][Image].
+///
+/// [Image]: ../../gtk/struct.Image.html
 pub trait ImageExtHelpers: ImageExt {
     fn set_pixbuf(&self, pixbuf: Option<Pixbuf>) {
         self.set_from_pixbuf(pixbuf.as_ref());
@@ -179,7 +196,9 @@ pub trait ImageExtHelpers: ImageExt {
 
 impl<A> ImageExtHelpers for A where A: ImageExt {}
 
-/// Helper trait for `Label`.
+/// Helper trait for [`Label`][Label].
+///
+/// [Label]: ../../gtk/struct.Label.html
 pub trait LabelExtHelpers: LabelExt {
     fn get_markup(&self) -> Option<GString> {
         self.get_label()

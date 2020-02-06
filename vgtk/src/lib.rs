@@ -159,6 +159,31 @@
 //! This will cause a `Message::ButtonWasClicked` message to be sent to your component's
 //! [`update`][Component::update] function when the user clicks the button.
 //!
+//! Signal handlers can also be declared as `async`, which will cause the framework to wrap the handler
+//! in an `async {}` block and `await` the
+//! message result before passing it on to your update function. For instance, this very contrived
+//! example shows a message dialog asking the user to confirm clicking the button before sending the
+//! `ButtonWasClicked` message.
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode, Component};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, DialogFlags, MessageType, ButtonsType};
+//! # #[derive(Clone, Debug)] enum Message { ButtonWasClicked }
+//! # #[derive(Default)] struct Comp;
+//! # impl Component for Comp { type Message = Message; type Properties = (); fn view(&self) -> VNode<Self> {
+//! gtk! {
+//!     <Button label="Click me" on clicked=async |_| {
+//!         vgtk::message_dialog(
+//!             vgtk::current_window().as_ref(),
+//!             DialogFlags::MODAL, MessageType::Info, ButtonsType::Ok, true,
+//!             "Please confirm that you clicked the button."
+//!         ).await;
+//!         Message::ButtonWasClicked
+//!     } />
+//! }
+//! # }}
+//! ```
+//!
 //! ## The `gtk!` Syntax
 //!
 //! The syntax for the [`gtk!`][vgtk::gtk!] macro is similar to [JSX], but with a number of necessary
@@ -180,19 +205,35 @@
 //! ```
 //!
 //! A GTK container is represented by an open/close element tag, with child tags representing its
-//! children. If a widget has a constructor that takes arguments, you can use that constructor in place
-//! of the element's tag name. Here's how to construct a [`Box`][Box] with a [`Button`][Button] inside it,
-//! showing off the constructor syntax as well as how to add child widgets:
+//! children.
 //!
 //! ```rust,no_run
 //! # use vgtk::{gtk, VNode};
-//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation, OrientableExt};
 //! # fn view() -> VNode<()> {
 //! gtk! {
-//!     <Box::new(Orientation::Horizontal, 10)>
+//!     <Box orientation=Orientation::Horizontal>
 //!         <Button label="Left click" />
 //!         <Button label="Right click" />
 //!     </Box>
+//! }
+//! # }
+//! ```
+//!
+//! If a widget has a constructor that takes arguments, you can use that constructor in place
+//! of the element's tag name. This syntax should only be used in cases where a widget simply cannot be constructed
+//! using properties alone, because the differ isn't able to update arguments that may have changed
+//! in constructors once the widget has been instantiated. It should be reserved only for when it's
+//! absolutely necessary, such as when constructing an [`Application`][Application], which doesn't
+//! implement [`Buildable`][Buildable] and therefore can't be constructed in any way other than through
+//! a constructor method.
+//!
+//! ```rust,no_run
+//! # use vgtk::{gtk, VNode, ext::ApplicationHelpers};
+//! # use vgtk::lib::{gtk::Application, gio::ApplicationFlags};
+//! # fn view() -> VNode<()> {
+//! gtk! {
+//!     <Application::new_unwrap(None, ApplicationFlags::empty()) />
 //! }
 //! # }
 //! ```
@@ -204,10 +245,10 @@
 //!
 //! ```rust,no_run
 //! # use vgtk::{gtk, VNode};
-//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
+//! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt};
 //! # fn view() -> VNode<()> {
 //! gtk! {
-//!     <Box::new(Orientation::Horizontal, 10)>
+//!     <Box>
 //!         <Button label="Click me" Box::expand=true Box::fill=true />
 //!     </Box>
 //! }
@@ -247,7 +288,7 @@
 //! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation};
 //! # fn view() -> VNode<()> {
 //! gtk! {
-//!     <Box::new(Orientation::Horizontal, 10)>
+//!     <Box>
 //!         {
 //!             (1..=5).map(|counter| {
 //!                 gtk! { <Button label=format!("Button #{}", counter) /> }
@@ -338,9 +379,9 @@
 //! method of a parent component:
 //!
 //! ```rust,no_run
-//! # use vgtk::{gtk, VNode, UpdateAction, Component, Callback};
+//! # use vgtk::{gtk, VNode, Component, Callback};
 //! # use vgtk::lib::gtk::{Button, ButtonExt, Box, BoxExt, Orientation, Label, LabelExt};
-//! #[derive(Clone, Debug, Default)]
+//! # #[derive(Clone, Debug, Default)]
 //! # pub struct MyButton {
 //! #     pub label: String,
 //! #     pub on_clicked: Option<Callback<()>>,
@@ -355,7 +396,7 @@
 //! # impl Component for Parent { type Message = ParentMessage; type Properties = ();
 //! fn view(&self) -> VNode<Self> {
 //!     gtk! {
-//!         <Box::new(Orientation::Horizontal, 10)>
+//!         <Box>
 //!             <Label label="Here is a button:" />
 //!             <@MyButton label="Click me!" on_clicked=|_| ParentMessage::ButtonClicked />
 //!         </Box>
@@ -387,8 +428,8 @@
 //! While this framework is currently sufficiently usable that we can implement [TodoMVC] in it, there
 //! are likely to be a lot of rough edges still to be uncovered. In particular, a lot of properties on
 //! GTK objects don't map cleanly to `get_*` and `set_*` methods in the [Gtk-rs] mappings, as required
-//! by the `gtk!` macro, which has necessitated the collection of hacks in [`vgtk::ext`][vgtk::ext].
-//! There are likely many more to be found in widgets as yet unused.
+//! by the [`gtk!`][vgtk::gtk!] macro, which has necessitated the collection of hacks in
+//! [`vgtk::ext`][vgtk::ext]. There are likely many more to be found in widgets as yet unused.
 //!
 //! As alluded to previously, the diffing algorithm is also complicated by the irregular structure of the
 //! GTK widget tree. Not all child widgets are added through the [`Container`][Container] API, and while
@@ -424,17 +465,18 @@
 //! [UpdateAction::None]: enum.UpdateAction.html#variant.None
 //! [UpdateAction::Render]: enum.UpdateAction.html#variant.Render
 //! [UpdateAction::Defer]: enum.UpdateAction.html#variant.Defer
-//! [Application]: https://gtk-rs.org/docs/gtk/struct.Application.html
-//! [Button]: https://gtk-rs.org/docs/gtk/struct.Button.html
-//! [Button::connect_clicked]: https://gtk-rs.org/docs/gtk/trait.ButtonExt.html#tymethod.connect_clicked
-//! [Button::set_label]: https://gtk-rs.org/docs/gtk/trait.ButtonExt.html#tymethod.set_label
-//! [Box]: https://gtk-rs.org/docs/gtk/struct.Box.html
-//! [Box::new]: https://gtk-rs.org/docs/gtk/struct.Box.html#method.new
-//! [Container]: https://gtk-rs.org/docs/gtk/struct.Container.html
-//! [MenuButton]: https://gtk-rs.org/docs/gtk/struct.MenuButton.html
-//! [MenuButtonExt]: https://gtk-rs.org/docs/gtk/trait.MenuButtonExt.html
-//! [WidgetExt]: https://gtk-rs.org/docs/gtk/trait.WidgetExt.html
-//! [Window]: https://gtk-rs.org/docs/gtk/struct.Window.html
+//! [Application]: ../gtk/struct.Application.html
+//! [Buildable]: ../gtk/struct.Buildable.html
+//! [Button]: ../gtk/struct.Button.html
+//! [Button::connect_clicked]: ../gtk/trait.ButtonExt.html#tymethod.connect_clicked
+//! [Button::set_label]: ../gtk/trait.ButtonExt.html#tymethod.set_label
+//! [Box]: ../gtk/struct.Box.html
+//! [Box::new]: ../gtk/struct.Box.html#method.new
+//! [Container]: ../gtk/struct.Container.html
+//! [MenuButton]: ../gtk/struct.MenuButton.html
+//! [MenuButtonExt]: ../gtk/trait.MenuButtonExt.html
+//! [WidgetExt]: ../gtk/trait.WidgetExt.html
+//! [Window]: ../gtk/struct.Window.html
 //! [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
 
 #![forbid(rust_2018_idioms)]
@@ -483,7 +525,7 @@ use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
 pub use crate::callback::Callback;
 pub use crate::component::{current_object, current_window, Component, UpdateAction};
 pub use crate::menu_builder::{menu, MenuBuilder};
-pub use crate::vnode::VNode;
+pub use crate::vnode::{VNode, VNodeIterator};
 
 /// Re-exports of GTK and its associated libraries.
 ///
@@ -497,9 +539,30 @@ pub mod lib {
     pub use ::gtk;
 }
 
-/// Run an `Application` component until termination.
+/// Run an [`Application`][Application] component until termination.
 ///
 /// This is generally the function you'll call to get everything up and running.
+/// Note that you pass your top level component as a type argument, not a value
+/// argument. The framework will construct the component state automatically using
+/// [`Default::default()`][default] before launching the component.
+///
+/// You can call [`vgtk::quit()`][quit] from inside the component or any subcomponent
+/// to signal the application to terminate normally. This is equivalent to calling
+/// [`Application::quit()`][Application::quit] on the [`Application`][Application]
+/// object directly.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # type MyComponent = ();
+/// let return_code = vgtk::run::<MyComponent>();
+/// std::process::exit(return_code);
+/// ```
+///
+/// [Application]: ../gtk/struct.Application.html
+/// [default]: https://doc.rust-lang.org/std/default/trait.Default.html#tymethod.default
+/// [quit]: fn.quit.html
+/// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
 pub fn run<C: 'static + Component>() -> i32 {
     gtk::init().expect("GTK failed to initialise");
     let partial_task = PartialComponentTask::<C, ()>::new(Default::default(), None, None);
@@ -533,13 +596,18 @@ pub fn run<C: 'static + Component>() -> i32 {
     app.run(&args)
 }
 
-/// Launch a `Dialog` component as a modal dialog.
+/// Launch a [`Dialog`][Dialog] component as a modal dialog.
 ///
 /// The parent window will be blocked until it resolves.
 ///
-/// It returns a `Future` which resolves either to `Ok(ResponseType)` when the
-/// `response` signal is emitted, or to `Err(Canceled)` if the dialog is
+/// It returns a [`Future`][Future] which resolves either to `Ok(`[`ResponseType`][ResponseType]`)` when the
+/// `response` signal is emitted, or to `Err(`[`Canceled`][Canceled]`)` if the dialog is
 /// destroyed before the user responds to it.
+///
+/// [Dialog]: ../gtk/struct.Dialog.html
+/// [ResponseType]: ../gtk/enum.ResponseType.html
+/// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
+/// [Canceled]: https://docs.rs/futures/latest/futures/channel/oneshot/struct.Canceled.html
 pub fn run_dialog<C: 'static + Component>(
     parent: Option<&Window>,
 ) -> impl Future<Output = Result<ResponseType, Canceled>> {
@@ -579,26 +647,32 @@ fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
     }
 }
 
-/// Tell the running `Application` to quit.
+/// Tell the running [`Application`][Application] to quit.
 ///
-/// This calls `Application::quit()` on the current default `Application`. It
-/// will cause the `vgtk::run()` in charge of that `Application` to terminate.
+/// This calls [`Application::quit()`][Application::quit] on the current default
+/// [`Application`][Application]. It
+/// will cause the [`vgtk::run()`][run] in charge of that [`Application`][Application]
+/// to terminate.
+///
+/// [Application]: ../gtk/struct.Application.html
+/// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
+/// [run]: fn.run.html
 pub fn quit() {
     gio::Application::get_default()
         .expect("no default Application!")
         .quit();
 }
 
-/// Connect a GLib signal to a `Future`.
+/// Connect a GLib signal to a [`Future`][Future].
 ///
 /// This macro takes a GLib object and the name of a method to connect it to a
 /// signal (generally of the form `connect_signal_name`), and generates an
 /// `async` block that will resolve with the emitted value the first time the
 /// signal is emitted.
 ///
-/// The output type of the async block is `Result<T, Canceled>`, where `T` is
+/// The output type of the async block is `Result<T, `[`Canceled`][Canceled]`>`, where `T` is
 /// the type of the emitted value (the second argument to the callback
-/// `connect_signal_name` takes). It will produce `Err(Canceled)` if the object
+/// `connect_signal_name` takes). It will produce `Err(`[`Canceled`][Canceled]`)` if the object
 /// is destroyed before the signal is emitted.
 ///
 /// # Examples
@@ -617,6 +691,9 @@ pub fn quit() {
 /// }
 /// # };
 /// ```
+///
+/// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
+/// [Canceled]: https://docs.rs/futures/latest/futures/channel/oneshot/struct.Canceled.html
 #[macro_export]
 macro_rules! on_signal {
     ($object:expr, $connect:ident) => {
@@ -639,11 +716,11 @@ macro_rules! on_signal {
     };
 }
 
-/// Connect a GLib signal to a `Stream`.
+/// Connect a GLib signal to a [`Stream`][Stream].
 ///
 /// This macro takes a GLib object and the name of a method to connect it to a
 /// signal (generally of the form `connect_signal_name`), and generates a
-/// `Stream` that will produce a value every time the signal is emitted.
+/// [`Stream`][Stream] that will produce a value every time the signal is emitted.
 ///
 /// The output type of the stream is the type of the emitted value (the second
 /// argument to the callback `connect_signal_name` takes). The stream will
@@ -667,6 +744,8 @@ macro_rules! on_signal {
 ///     future::ready(())
 /// });
 /// ```
+///
+/// [Stream]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 #[macro_export]
 macro_rules! stream_signal {
     ($object:expr, $connect:ident) => {{
@@ -676,14 +755,36 @@ macro_rules! stream_signal {
     }};
 }
 
-/// Open a simple `MessageDialog`.
+/// Open a simple [`MessageDialog`][MessageDialog].
 ///
-/// The arguments are passed directly to `MessageDialog::new()`. The `is_markup`
-/// flag, if set, will interpret the `message` as markup rather than plain text
-/// (see `MessageDialog::set_markup()`).
+/// The arguments are passed directly to [`MessageDialog::new()`][new].
+/// The `is_markup` flag, if set, will interpret the `message` as markup rather than plain text
+/// (see [`MessageDialog::set_markup()`][set_markup]).
 ///
-/// It returns a `Future` which will resolve to the `ResponseType` the user
-/// responds with.
+/// It returns a [`Future`][Future] which will resolve to the [`ResponseType`][ResponseType]
+/// the user responds with.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use vgtk::lib::gtk::{DialogFlags, MessageType, ButtonsType};
+/// # async {
+/// vgtk::message_dialog(
+///     vgtk::current_window().as_ref(),
+///     DialogFlags::MODAL,
+///     MessageType::Error,
+///     ButtonsType::OkCancel,
+///     true,
+///     "<b>ERROR:</b> Unknown error."
+/// ).await;
+/// # };
+/// ```
+///
+/// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
+/// [ResponseType]: ../gtk/enum.ResponseType.html
+/// [MessageDialog]: ../gtk/struct.MessageDialog.html
+/// [new]: ../gtk/struct.MessageDialog.html#method.new
+/// [set_markup]: ../gtk/trait.MessageDialogExt.html#tymethod.set_markup
 pub async fn message_dialog<W, S>(
     parent: Option<&W>,
     flags: DialogFlags,

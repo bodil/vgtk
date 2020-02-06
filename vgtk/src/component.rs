@@ -21,22 +21,28 @@ use crate::scope::{AnyScope, Scope};
 use crate::vdom::State;
 use crate::vnode::VNode;
 
-/// An action resulting from a `Component::update()`.
+/// An action resulting from a [`Component::update()`](trait.Component.html#method.update).
 pub enum UpdateAction<C: Component> {
     /// No action is necessary.
     None,
     /// Re-render the widget tree.
     Render,
     /// Run an async task and update again when it completes, passing the message
-    /// returned from the `Future` to `Component::update()`.
+    /// returned from the [`Future`][Future] to [`Component::update()`][update].
     ///
-    /// You should use `UpdateAction::defer()` to construct this, rather than
-    /// trying to box up your `Future` yourself.
+    /// You should use [`UpdateAction::defer()`][defer] to construct this, rather than
+    /// trying to box up your [`Future`][Future] yourself.
+    ///
+    /// [update]: trait.Component.html#method.update
+    /// [defer]: #method.defer
+    /// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
     Defer(Pin<Box<dyn Future<Output = C::Message> + 'static>>),
 }
 
 impl<C: Component> UpdateAction<C> {
-    /// Construct a deferred action given a `Future`.
+    /// Construct a deferred action given a [`Future`][Future].
+    ///
+    /// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
     pub fn defer(job: impl Future<Output = C::Message> + 'static) -> Self {
         UpdateAction::Defer(job.boxed_local())
     }
@@ -401,13 +407,16 @@ where
     }
 }
 
-/// Get the current `Object`.
+/// Get the current [`Object`][Object].
 ///
-/// When called from inside a `Component`, it will return the top level `Object`
+/// When called from inside a [`Component`][Component], it will return the top level [`Object`][Object]
 /// for this component, if it currently exists.
 ///
-/// When called from outside a `Component`'s lifecycle, you should hopefully
+/// When called from outside a [`Component`][Component]'s lifecycle, you should hopefully
 /// just receive a `None`, but, generally, try not to do that.
+///
+/// [Object]: ../glib/object/struct.Object.html
+/// [Component]: trait.Component.html
 pub fn current_object() -> Option<Object> {
     LOCAL_CONTEXT.with(|key| {
         let lock = key.read().unwrap();
@@ -417,22 +426,26 @@ pub fn current_object() -> Option<Object> {
     })
 }
 
-/// Get the current `Window`.
+/// Get the current [`Window`][Window].
 ///
-/// When called from inside a `Component`, it will return the `Window` to which
-/// its top level `Object` is attached.
+/// When called from inside a [`Component`][Component], it will return the [`Window`][Window] to which
+/// its top level [`Object`][Object] is attached.
 ///
-/// If the top level `Object` is a `Window`, it will return that.
+/// If the top level [`Object`][Object] is a [`Window`][Window], it will return that.
 ///
-/// If the top level `Object` is an `Application`, it will return that
-/// `Application`'s idea of what its currently active `Window` is, as determined
+/// If the top level [`Object`][Object] is an `Application`, it will return that
+/// `Application`'s idea of what its currently active [`Window`][Window] is, as determined
 /// by `Application::get_active_window()`.
 ///
-/// If it's unable to determine what the current `Window` is, you'll get a
+/// If it's unable to determine what the current [`Window`][Window] is, you'll get a
 /// `None`.
 ///
-/// When called from outside a `Component`'s lifecycle, you should hopefully
+/// When called from outside a [`Component`][Component]'s lifecycle, you should hopefully
 /// just receive a `None`, but, generally, try not to do that.
+///
+/// [Object]: ../glib/object/struct.Object.html
+/// [Window]: ../gtk/struct.Window.html
+/// [Component]: trait.Component.html
 pub fn current_window() -> Option<Window> {
     current_object().and_then(|obj| match obj.downcast::<Window>() {
         Ok(window) => Some(window),
