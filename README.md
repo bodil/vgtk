@@ -91,7 +91,8 @@ fn main() {
 ## Examples
 
 See the [examples](examples) folder for a collection of example applications, including a complete
-[TodoMVC](examples/todomvc) implementation.
+[TodoMVC](examples/todomvc) implementation. To try out the TodoMVC example, clone the `vgtk` repo
+and issue `cargo run --bin todomvc` from the project root directory.
 
 ## Licence
 
