@@ -492,6 +492,7 @@ mod menu_builder;
 pub mod properties;
 #[doc(hidden)]
 pub mod scope;
+pub mod types;
 mod vdom;
 #[doc(hidden)]
 pub mod vnode;

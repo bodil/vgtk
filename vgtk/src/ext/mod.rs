@@ -11,15 +11,14 @@ use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
 use gtk::{
-    Application, ApplicationWindowExt, BoxExt, GtkApplicationExt, GtkWindowExt, ImageExt, LabelExt,
-    Window, WindowPosition, WindowType,
+    Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt, ImageExt,
+    LabelExt, Widget, Window, WindowPosition, WindowType,
 };
 
 use colored::Colorize;
 use log::trace;
 
-pub mod grid;
-pub use grid::GridExtHelpers;
+use crate::types::GridPosition;
 
 /// Helper trait for [`Application`][Application].
 ///
@@ -206,3 +205,152 @@ pub trait LabelExtHelpers: LabelExt {
 }
 
 impl<A> LabelExtHelpers for A where A: LabelExt {}
+
+/// Helper trait for [`Grid`][Grid] layout.
+///
+/// This helper enables using the GTK Grid for laying out widgets in a window.
+/// For example, the following snippet specifies a layout that will render to
+/// look something like this:
+///
+/// ```text
+///    +--------------------------------------------------+
+///    |         +-------------------------------------+  |
+///    | Label1: | Text input                          |  |
+///    |         +-------------------------------------+  |
+///    |         +-------------------------------------+  |
+///    | Label2: | Another bit of text                 |  |
+///    |         +-------------------------------------+  |
+///    |  +--------------------------------------------+  |
+///    |  |                                            |  |
+///    |  |                                            |  |
+///    |  |                                            |  |
+///    |  |              More stuff here               |  |
+///    |  |                                            |  |
+///    |  |                                            |  |
+///    |  |                                            |  |
+///    |  |                                            |  |
+///    |  +--------------------------------------------+  |
+///    |                                   +-----------+  |
+///    |                                   | A Button  |  |
+///    |                                   +-----------+  |
+///    +--------------------------------------------------+
+/// ```
+///
+/// ```rust,no_run
+/// # #![recursion_limit="256"]
+/// # use vgtk::{gtk, VNode};
+/// # use vgtk::ext::*;
+/// # use vgtk::lib::gtk::*;
+/// # fn build() -> VNode<()> {
+/// gtk! {
+///     <Grid row_spacing=10 column_spacing=10>
+///
+///       // --- Row 0 ---
+///
+///       // Widgets are placed by default in the top left corner, so this
+///       // label does not need any additional annotation.
+///       <Label label="Label1:" halign=Align::End />
+///
+///       // This text entry is being moved to column 2. We don't specify
+///       // the row because, again, by default it is placed in the first row
+///       // which is what we want.
+///       <Entry Grid::left=1 hexpand=true />
+///
+///       // --- Row 1 ---
+///
+///       // Leave the column at its default of 0 and set the row to 1.
+///       <Label label="Label2:" Grid::top=1 halign=Align::End />
+///
+///       // Place this text entry in row 1 and column 1.
+///       <Entry Grid::left=1 Grid::top=1 hexpand=true />
+///
+///       // --- Row 2 ---
+///
+///       // We want the following widget to span the width of the grid and
+///       // also consume excess vertical space.
+///       <ScrolledWindow Grid::top=2 Grid::width=2 hexpand=true vexpand=true>
+///         <ListBox />
+///       </ScrolledWindow>
+///
+///       // --- Row 3 ---
+///
+///       // We leave the first row unoccupied and only have a button in the second
+///       // column.
+///       <Button label="A Button" Grid::left=1 Grid::top=3 hexpand=false halign=Align::End />
+///
+///     </Grid>
+/// }
+/// # }
+/// ```
+///
+///
+/// [Grid]: ../../gtk/struct.Grid.html
+pub trait GridExtHelpers: GridExt {
+    fn set_child_position<P: IsA<Widget>>(&self, child: &P, position: GridPosition);
+    fn get_child_position<P: IsA<Widget>>(&self, child: &P) -> GridPosition;
+
+    fn set_child_left<P: IsA<Widget>>(&self, child: &P, left: i32);
+    fn get_child_left<P: IsA<Widget>>(&self, child: &P) -> i32;
+
+    fn set_child_top<P: IsA<Widget>>(&self, child: &P, top: i32);
+    fn get_child_top<P: IsA<Widget>>(&self, child: &P) -> i32;
+
+    fn set_child_width<P: IsA<Widget>>(&self, child: &P, width: i32);
+    fn get_child_width<P: IsA<Widget>>(&self, child: &P) -> i32;
+
+    fn set_child_height<P: IsA<Widget>>(&self, child: &P, height: i32);
+    fn get_child_height<P: IsA<Widget>>(&self, child: &P) -> i32;
+}
+
+impl<G> GridExtHelpers for G
+where
+    G: GridExt,
+{
+    fn set_child_position<P: IsA<Widget>>(&self, child: &P, position: GridPosition) {
+        self.set_cell_left_attach(child, position.left);
+        self.set_cell_top_attach(child, position.top);
+        self.set_cell_width(child, position.width);
+        self.set_cell_height(child, position.height);
+    }
+
+    fn get_child_position<P: IsA<Widget>>(&self, child: &P) -> GridPosition {
+        GridPosition {
+            left: self.get_cell_left_attach(child),
+            top: self.get_cell_top_attach(child),
+            width: self.get_cell_width(child),
+            height: self.get_cell_height(child),
+        }
+    }
+
+    fn set_child_left<P: IsA<Widget>>(&self, child: &P, left: i32) {
+        self.set_cell_left_attach(child, left);
+    }
+
+    fn get_child_left<P: IsA<Widget>>(&self, child: &P) -> i32 {
+        self.get_cell_left_attach(child)
+    }
+
+    fn set_child_top<P: IsA<Widget>>(&self, child: &P, top: i32) {
+        self.set_cell_top_attach(child, top);
+    }
+
+    fn get_child_top<P: IsA<Widget>>(&self, child: &P) -> i32 {
+        self.get_cell_top_attach(child)
+    }
+
+    fn set_child_width<P: IsA<Widget>>(&self, child: &P, width: i32) {
+        self.set_cell_width(child, width);
+    }
+
+    fn get_child_width<P: IsA<Widget>>(&self, child: &P) -> i32 {
+        self.get_cell_width(child)
+    }
+
+    fn set_child_height<P: IsA<Widget>>(&self, child: &P, height: i32) {
+        self.set_cell_height(child, height);
+    }
+
+    fn get_child_height<P: IsA<Widget>>(&self, child: &P) -> i32 {
+        self.get_cell_height(child)
+    }
+}
