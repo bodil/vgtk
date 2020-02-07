@@ -22,13 +22,6 @@ A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/)
 
 -   [API docs (master branch)](http://bodil.lol/vgtk/)
 
-## Installation
-
-You'll need to ensure GTK is installed and usable on your system before you can use `vgtk`. Please
-consult the [Gtk-rs requirements doc](https://gtk-rs.org/docs-src/requirements) for detailed
-instructions. It can be especially involved on Windows, but if you follow their instructions
-carefully, it does eventually work.
-
 ## Show Me!
 
 <p align="center">
@@ -87,6 +80,29 @@ fn main() {
    std::process::exit(run::<Model>());
 }
 ```
+
+## Installation
+
+You'll need to ensure GTK is installed and usable on your system before you can use `vgtk`. Please
+consult the [Gtk-rs requirements doc](https://gtk-rs.org/docs-src/requirements) for detailed
+instructions. It can be especially involved on Windows, but if you follow their instructions
+carefully, it does eventually work.
+
+## Getting Started
+
+You can use [`cargo generate`](https://github.com/ashleygwilliams/cargo-generate) to start a `vgtk`
+project:
+
+```sh
+cargo generate --git https://github.com/bodil/cargo-template-vgtk
+```
+
+Alternatively, if you don't want to install `cargo generate`, you can clone the
+[template repo](https://github.com/bodil/cargo-template-vgtk) and edit the `Cargo.toml` file
+manually to fit your project.
+
+To run your app, enter the project folder and type `cargo run`, and marvel at the little window
+which eventually appears and what wonders you could fill it with.
 
 ## Examples
 
