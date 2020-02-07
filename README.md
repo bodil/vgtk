@@ -1,7 +1,6 @@
 # vgtk
 
-A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/) and
-[Gtk-rs](https://gtk-rs.org/).
+A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/) and [Gtk-rs].
 
 ## At A Glance
 
@@ -22,6 +21,13 @@ A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/)
 ## Documentation
 
 -   [API docs (master branch)](http://bodil.lol/vgtk/)
+
+## Installation
+
+You'll need to ensure GTK is installed and usable on your system before you can use `vgtk`. Please
+consult the [Gtk-rs requirements doc](https://gtk-rs.org/docs-src/requirements) for detailed
+instructions. It can be especially involved on Windows, but if you follow their instructions
+carefully, it does eventually work.
 
 ## Show Me!
 
@@ -99,3 +105,5 @@ General Public Licence for more details.
 
 You should have received a copy of the GNU Lesser General Public Licence along with this program. If
 not, see <https://www.gnu.org/licenses/>.
+
+[gtk-rs]: https://gtk-rs.org/
