@@ -4,7 +4,16 @@ version = "0.1.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 license = "LGPL-3.0+"
+description = "Proc macros for vgtk"
+repository = "https://github.com/bodil/vgtk"
+documentation = "https://docs.rs/vgtk"
+readme = "../README.md"
+categories = ["gui"]
+keywords = ["gtk"]
 build = "build.rs"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lib]
 proc-macro = true
