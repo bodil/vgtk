@@ -7,6 +7,7 @@ license = "LGPL-3.0+"
 description = "A declarative UI framework for GTK"
 repository = "https://github.com/bodil/vgtk"
 documentation = "https://docs.rs/vgtk"
+homepage = "http://vgtk.rs"
 readme = "../README.md"
 categories = ["gui"]
 keywords = ["gtk"]
