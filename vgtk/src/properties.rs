@@ -95,6 +95,12 @@ where
     }
 }
 
+impl<'a, A> PropertyValueCoerce<'a, Option<&'a A>> for Option<A> {
+    fn property_coerce(value: &'a Option<A>) -> Option<&'a A> {
+        value.as_ref()
+    }
+}
+
 impl<'a> PropertyValueCompare<'a, &'a str> for String {
     fn property_compare(left: &str, right: &String) -> bool {
         left == right
