@@ -806,3 +806,67 @@ where
     dialog.destroy();
     response.unwrap()
 }
+
+/// Generate a virtual component tree only if a condition is true.
+///
+/// You'll very often want to insert a widget only if a certain condition is true,
+/// and insert nothing at all otherwise. This macro automates this common pattern.
+/// It will validate your condition, and if true, it will return a [`VNodeIterator`][VNodeIterator]
+/// containing the widget tree you specify. If false, it will use [`VNode::empty()`][VNode::empty]
+/// to make an empty iterator.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use vgtk::lib::gtk::{Button, ButtonExt, Box};
+/// # use vgtk::{gtk, gtk_if, VNode};
+/// # fn view() -> VNode<()> {
+/// let buttons = 2;
+/// gtk! {
+///     <Box>
+///         <Button label="Button 1" />
+///         {
+///             gtk_if!(buttons == 2 => {
+///                 <Button label="Button 2" />
+///             })
+///         }
+///     </Box>
+/// }
+/// # }
+/// ```
+///
+/// This generates code equivalent to the following, which is how you'd do it
+/// without the macro:
+///
+/// ```rust,no_run
+/// # use vgtk::lib::gtk::{Button, ButtonExt, Box};
+/// # use vgtk::{gtk, gtk_if, VNode};
+/// # fn view() -> VNode<()> {
+/// let buttons = 2;
+/// gtk! {
+///     <Box>
+///         <Button label="Button 1" />
+///         {
+///             if buttons == 2 {
+///                 gtk!(<Button label="Button 2" />).into_iter()
+///             } else {
+///                 VNode::empty()
+///             }
+///         }
+///     </Box>
+/// }
+/// # }
+/// ```
+///
+/// [VNodeIterator]: struct.VNodeIterator.html
+/// [VNode::empty]: enum.VNode.html#method.empty
+#[macro_export]
+macro_rules! gtk_if {
+    ($cond:expr => $body:tt ) => {
+        if $cond {
+            (gtk! $body).into_iter()
+        } else {
+            $crate::VNode::empty()
+        }
+    }
+}

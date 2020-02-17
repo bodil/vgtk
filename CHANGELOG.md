@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### ADDED
 
+-   A macro `gtk_if!` has been added, to automate the common case of conditionally inserting a child
+    widget.
 -   Subcomponents will now accept signal handler syntax, rendering `on signal=|| {}` into
     `on_signal=|| {}`, for consistency.
 -   Properties which want an `Option<&A>` will now accept an `Option<A>`. (#33)

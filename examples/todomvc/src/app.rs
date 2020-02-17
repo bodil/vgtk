@@ -5,7 +5,7 @@ use vgtk::lib::gio::{ActionExt, ApplicationFlags, File, FileExt, SimpleAction};
 use vgtk::lib::glib::Error;
 use vgtk::lib::gtk::prelude::*;
 use vgtk::lib::gtk::*;
-use vgtk::{ext::*, gtk, on_signal, Component, UpdateAction, VNode};
+use vgtk::{ext::*, gtk, gtk_if, on_signal, Component, UpdateAction, VNode};
 
 use strum_macros::{Display, EnumIter};
 
@@ -90,14 +90,10 @@ impl Model {
                     <Label label=self.left_label()/>
                     <@Radio<Filter> active=self.filter Box::center_widget=true on changed=|filter| Msg::Filter { filter } />
                     {
-                        if self.filter(Filter::Completed).count() > 0 {
-                            (gtk!{
-                                 <Button label="Clear completed" Box::pack_type=PackType::End
-                                         on clicked=|_| Msg::ClearCompleted/>
-                            }).into_iter()
-                        } else {
-                            VNode::empty()
-                        }
+                        gtk_if!(self.filter(Filter::Completed).count() > 0 => {
+                            <Button label="Clear completed" Box::pack_type=PackType::End
+                                    on clicked=|_| Msg::ClearCompleted/>
+                        })
                     }
                 </Box>
             </Box>
