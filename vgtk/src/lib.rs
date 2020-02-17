@@ -396,7 +396,7 @@
 //!     gtk! {
 //!         <Box>
 //!             <Label label="Here is a button:" />
-//!             <@MyButton label="Click me!" on_clicked=|_| ParentMessage::ButtonClicked />
+//!             <@MyButton label="Click me!" on clicked=|_| ParentMessage::ButtonClicked />
 //!         </Box>
 //!     }
 //! }

@@ -65,7 +65,22 @@ pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
                     )
                 }
             }
-            Attribute::Handler { .. } => panic!("handler attributes are not allowed in components"),
+            Attribute::Handler {
+                name,
+                async_keyword,
+                args,
+                body,
+            } => {
+                if async_keyword.is_some() {
+                    panic!("component handlers cannot be async");
+                }
+                let name = Ident::new(&format!("on_{}", name.to_string()), name.span());
+                let args = to_stream(args);
+                let body = to_stream(body);
+                quote!(
+                    props.#name = PropTransform::transform(&vcomp, move #args #body);
+                )
+            }
         })
     }
     quote!({
