@@ -266,7 +266,7 @@ impl Component for Model {
                                                         enabled=true on activate=|_, _| Msg::MenuSaveAs/>
 
                     <HeaderBar title=format!("TodoMVC - {}{}", title, clean) subtitle="wtf do we do now" show_close_button=true>
-                        <MenuButton HeaderBar::pack_type=PackType::End @MenuButtonExt::direction=ArrowType::Down
+                        <MenuButton HeaderBar::pack_type=PackType::End @MenuButtonExt::direction=ArrowType::Down relief=ReliefStyle::None
                                     image="open-menu-symbolic">
                             <Menu::new_from_model(&main_menu)/>
                         </MenuButton>
