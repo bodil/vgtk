@@ -57,7 +57,10 @@ pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
                     )
                 } else {
                     if !parent.is_empty() {
-                        panic!("component attributes cannot have paths");
+                        let span = parent[0].span();
+                        return quote_spanned! {span =>
+                            compile_error! { "component properties cannot have paths" }
+                        };
                     }
                     let value = to_stream(value);
                     quote!(
@@ -71,8 +74,10 @@ pub fn expand_component(gtk: &GtkComponent) -> TokenStream {
                 args,
                 body,
             } => {
-                if async_keyword.is_some() {
-                    panic!("component handlers cannot be async");
+                if let Some(async_keyword) = async_keyword {
+                    return quote_spanned! {async_keyword.span() =>
+                        compile_error! { "component callbacks cannot be async" }
+                    };
                 }
                 let name = Ident::new(&format!("on_{}", name.to_string()), name.span());
                 let args = to_stream(args);
