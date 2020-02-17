@@ -12,16 +12,15 @@ use std::rc::Rc;
 /// parent component's [`Component::Message`][Message] type. The framework will automatically take
 /// care of figuring out the callback's type signature when you mount the subcomponent.
 ///
-/// Note that you must always wrap the callback in an [`Option`][Option], because the properties
-/// object is constructed using [`Default::default()`][default] before filling in the property values,
-/// and it needs a safe and constructable default value for the callback. More crucially,
-/// for this reason the machinery which figures out the callback's type signature is
-/// implemented for `Option<Callback<_>>` but not for plain `Callback<_>`.
+/// Note that the [`Default`][Default] implementation for `Callback` constructs an empty callback,
+/// which does nothing and allocates nothing. This is the desired behaviour when using a callback
+/// as a [`Component`][Component] property: if the user doesn't specify a callback explicitly, there
+/// shouldn't be a callback.
 ///
 /// ```rust,no_run
 /// # use vgtk::Callback;
 /// struct MyComponentProperties {
-///     on_message: Option<Callback<String>>,
+///     on_message: Callback<String>,
 /// }
 /// ```
 ///
@@ -31,7 +30,7 @@ use std::rc::Rc;
 /// # use vgtk::{gtk, VNode, Component, Callback};
 /// # #[derive(Clone, Debug, Default)]
 /// # pub struct MyComponent {
-/// #     pub on_message: Option<Callback<String>>,
+/// #     pub on_message: Callback<String>,
 /// # }
 /// # impl Component for MyComponent {
 /// #     type Message = ();
@@ -48,15 +47,30 @@ use std::rc::Rc;
 ///
 /// [Component]: trait.Component.html
 /// [Message]: trait.Component.html#associatedtype.Message
-/// [default]: https://doc.rust-lang.org/std/default/trait.Default.html#tymethod.default
+/// [Default]: https://doc.rust-lang.org/std/default/trait.Default.html
 /// [String]: https://doc.rust-lang.org/std/string/struct.String.html
 /// [Option]: https://doc.rust-lang.org/std/option/enum.Option.html
-pub struct Callback<A>(pub(crate) Rc<dyn Fn(A)>);
+pub struct Callback<A>(pub(crate) Option<Rc<dyn Fn(A)>>);
 
-impl<A: Debug> Callback<A> {
+impl<A> Callback<A> {
     /// Send a value to the callback.
+    ///
+    /// If the callback is empty, this has no effect.
     pub fn send(&self, value: A) {
-        (self.0)(value)
+        if let Some(callback) = &self.0 {
+            callback(value)
+        }
+    }
+
+    /// Test whether a callback is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+}
+
+impl<A> Default for Callback<A> {
+    fn default() -> Self {
+        Callback(None)
     }
 }
 
@@ -68,7 +82,11 @@ impl<A> Clone for Callback<A> {
 
 impl<A> PartialEq for Callback<A> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        if let (Some(left), Some(right)) = (&self.0, &other.0) {
+            Rc::ptr_eq(left, right)
+        } else {
+            false
+        }
     }
 }
 
@@ -80,6 +98,6 @@ impl<A> Debug for Callback<A> {
 
 impl<A, F: Fn(A) + 'static> From<F> for Callback<A> {
     fn from(func: F) -> Self {
-        Callback(Rc::new(func))
+        Callback(Some(Rc::new(func)))
     }
 }

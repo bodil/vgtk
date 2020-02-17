@@ -329,7 +329,7 @@
 //! #[derive(Clone, Debug, Default)]
 //! pub struct MyButton {
 //!     pub label: String,
-//!     pub on_clicked: Option<Callback<()>>,
+//!     pub on_clicked: Callback<()>,
 //! }
 //!
 //! #[derive(Clone, Debug)]
@@ -353,9 +353,7 @@
 //!     fn update(&mut self, msg: Self::Message) -> UpdateAction<Self> {
 //!         match msg {
 //!             MyButtonMessage::Clicked => {
-//!                 if let Some(ref callback) = self.on_clicked {
-//!                     callback.send(());
-//!                 }
+//!                 self.on_clicked.send(());
 //!             }
 //!         }
 //!         UpdateAction::None
@@ -384,7 +382,7 @@
 //! # #[derive(Clone, Debug, Default)]
 //! # pub struct MyButton {
 //! #     pub label: String,
-//! #     pub on_clicked: Option<Callback<()>>,
+//! #     pub on_clicked: Callback<()>,
 //! # }
 //! # impl Component for MyButton {
 //! #     type Message = ();

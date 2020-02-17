@@ -103,17 +103,17 @@ impl<'a, Model: Component> PropTransform<Model, &'a str, String> for VComponent<
     }
 }
 
-impl<Model, F, A> PropTransform<Model, F, Option<Callback<A>>> for VComponent<Model>
+impl<Model, F, A> PropTransform<Model, F, Callback<A>> for VComponent<Model>
 where
     Model: Component + 'static,
     F: Fn(A) -> Model::Message + 'static,
 {
-    fn transform(&self, from: F) -> Option<Callback<A>> {
+    fn transform(&self, from: F) -> Callback<A> {
         let callback: Rc<dyn Fn(A)> = Rc::new(move |arg| {
             let msg = from(arg);
             let scope = Scope::<Model>::current_parent();
             scope.send_message(msg);
         });
-        Some(Callback(callback))
+        Callback(Some(callback))
     }
 }

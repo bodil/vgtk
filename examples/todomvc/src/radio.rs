@@ -9,7 +9,7 @@ use vgtk::{gtk, Callback, Component, UpdateAction, VNode};
 #[derive(Clone, Debug, Default)]
 pub struct Radio<Enum: Unpin> {
     pub active: Enum,
-    pub on_changed: Option<Callback<Enum>>,
+    pub on_changed: Callback<Enum>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,9 +46,7 @@ where
         match msg {
             RadioMsg::Selected(selected) => {
                 self.active = selected;
-                if let Some(ref callback) = self.on_changed {
-                    callback.send(self.active);
-                }
+                self.on_changed.send(self.active);
             }
         }
         UpdateAction::Render
