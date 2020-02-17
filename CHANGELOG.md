@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     the value for `send()` when a callback is empty, you can use `Callback::is_empty()` as a
     predicate instead of the `Some` check.
 
+### ADDED
+
+-   Properties which want an `Option<&A>` will now accept an `Option<A>`. (#33)
+
 ## [0.1.0] - 2020-02-07
 
 Initial release.
