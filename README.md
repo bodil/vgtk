@@ -21,7 +21,6 @@ A declarative desktop UI framework for Rust built on [GTK](https://www.gtk.org/)
 ## Documentation
 
 -   [API docs (latest release)](http://vgtk.rs/)
--   [API docs (master branch)](http://bodil.lol/vgtk/)
 -   [Tutorial](https://bodil.lol/vgtk/)
 
 ## Show Me!
