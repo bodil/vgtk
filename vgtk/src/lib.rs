@@ -524,6 +524,7 @@ use crate::component::{ComponentMessage, ComponentTask, PartialComponentTask};
 pub use crate::callback::Callback;
 pub use crate::component::{current_object, current_window, Component, UpdateAction};
 pub use crate::menu_builder::{menu, MenuBuilder};
+pub use crate::scope::Scope;
 pub use crate::vnode::{VNode, VNodeIterator};
 
 /// Re-exports of GTK and its associated libraries.
@@ -550,6 +551,9 @@ pub mod lib {
 /// [`Application::quit()`][Application::quit] on the [`Application`][Application]
 /// object directly.
 ///
+/// It's the equivalent of calling [`vgtk::start::<Component>()`][start] and then calling
+/// [`Application::run()`][Application::run] on the returned `Application` object.
+///
 /// # Examples
 ///
 /// ```rust,no_run
@@ -561,8 +565,43 @@ pub mod lib {
 /// [Application]: ../gtk/struct.Application.html
 /// [default]: https://doc.rust-lang.org/std/default/trait.Default.html#tymethod.default
 /// [quit]: fn.quit.html
+/// [start]: fn.start.html
 /// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
+/// [Application::run]: ../gio/trait.ApplicationExt.html#tymethod.run
 pub fn run<C: 'static + Component>() -> i32 {
+    let (app, _) = start::<C>();
+    let args: Vec<String> = std::env::args().collect();
+    app.run(&args)
+}
+
+/// Start an [`Application`][Application] component.
+///
+/// This will instantiate the component, construct the [`Application`][Application]
+/// object and register it as the default [`Application`][Application]. You will need
+/// to call [`Application::run()`][Application::run] on this to actually start the
+/// GTK event loop and activate the application.
+///
+/// Calling this instead of [vgtk::run()][run] is useful if you need to get your
+/// component's [`Scope`][Scope] in order to fire off some async work at startup and
+/// notify it when the work is done.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use vgtk::lib::gio::prelude::ApplicationExtManual;
+/// # type MyComponent = ();
+/// let (app, scope) = vgtk::start::<MyComponent>();
+/// let args: Vec<String> = std::env::args().collect();
+/// std::process::exit(app.run(&args));
+/// ```
+///
+/// [Application]: ../gtk/struct.Application.html
+/// [default]: https://doc.rust-lang.org/std/default/trait.Default.html#tymethod.default
+/// [quit]: fn.quit.html
+/// [run]: fn.run.html
+/// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
+/// [Application::run]: ../gio/trait.ApplicationExt.html#tymethod.run
+pub fn start<C: 'static + Component>() -> (Application, Scope<C>) {
     gtk::init().expect("GTK failed to initialise");
     let partial_task = PartialComponentTask::<C, ()>::new(Default::default(), None, None);
     let app: Application = partial_task.object().downcast().unwrap_or_else(|_| {
@@ -575,6 +614,7 @@ pub fn run<C: 'static + Component>() -> i32 {
     app.register(None as Option<&Cancellable>)
         .expect("unable to register Application");
 
+    let scope = partial_task.scope();
     let const_app = app.clone();
 
     let constructor = once(move |_| {
@@ -591,8 +631,7 @@ pub fn run<C: 'static + Component>() -> i32 {
         constructor(());
     });
 
-    let args: Vec<String> = std::env::args().collect();
-    app.run(&args)
+    (app, scope)
 }
 
 /// Launch a [`Dialog`][Dialog] component as a modal dialog.

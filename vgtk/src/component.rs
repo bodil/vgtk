@@ -267,6 +267,10 @@ where
     pub(crate) fn object(&self) -> Object {
         self.task.ui_state.as_ref().unwrap().object().clone()
     }
+
+    pub(crate) fn scope(&self) -> Scope<C> {
+        self.task.scope.clone()
+    }
 }
 
 pub(crate) struct ComponentTask<C, P>

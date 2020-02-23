@@ -1,4 +1,6 @@
 use std::any::TypeId;
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{Hash, Hasher};
 use std::sync::{
     atomic::{AtomicPtr, AtomicUsize, Ordering},
     Arc,
@@ -7,10 +9,13 @@ use std::sync::{
 use colored::Colorize;
 use log::debug;
 
-use futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::{TrySendError, UnboundedSender};
 
 use crate::component::{Component, ComponentTask};
 
+/// A channel for sending messages to a [`Component`][Component].
+///
+/// [Component]: trait.Component.html
 pub struct Scope<C: Component> {
     name: &'static str,
     muted: Arc<AtomicUsize>,
@@ -34,6 +39,30 @@ impl<C: Component> Clone for Scope<C> {
             muted: self.muted.clone(),
             channel: self.channel.clone(),
         }
+    }
+}
+
+impl<C: Component> Eq for Scope<C> {}
+impl<C: Component> PartialEq for Scope<C> {
+    /// Test whether two `Scope`s are equal.
+    ///
+    /// Two scopes are considered equal if they belong to the same
+    /// component instance, in other words if they send their messages
+    /// to the same destination.
+    fn eq(&self, other: &Self) -> bool {
+        self.channel.same_receiver(&other.channel)
+    }
+}
+
+impl<C: Component> Hash for Scope<C> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.channel.hash_receiver(h)
+    }
+}
+
+impl<C: Component> Debug for Scope<C> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "Scope[{}]:({:?})", self.name, self.channel)
     }
 }
 
@@ -66,7 +95,8 @@ impl<C: 'static + Component> Scope<C> {
         ComponentTask::<_, C>::current_parent_scope()
     }
 
-    pub fn send_message(&self, msg: C::Message) {
+    #[inline(always)]
+    fn log(&self, message: &C::Message) {
         debug!(
             "{} {}: {}",
             format!(
@@ -75,16 +105,43 @@ impl<C: 'static + Component> Scope<C> {
             )
             .green(),
             self.name.magenta().bold(),
-            format!("{:?}", msg).bright_white().bold()
+            format!("{:?}", message).bright_white().bold()
         );
+    }
+
+    #[doc(hidden)]
+    pub fn send_message(&self, message: C::Message) {
+        self.log(&message);
         if !self.is_muted() {
             self.channel
-                .unbounded_send(msg)
-                .expect("unable to send message to unbounded channel!")
+                .unbounded_send(message)
+                .expect("channel has gone unexpectedly out of scope!");
         }
     }
 
-    pub fn name(&self) -> &str {
+    /// Attempt to send a message to the component this `Scope` belongs to.
+    ///
+    /// This should always succeed if the component is running.
+    ///
+    /// If you receive an error, this generally means the component has
+    /// unmounted and the scope has become invalid.
+    ///
+    /// If the message is sent successfully, it will show up at your
+    /// component's [`Component::update()`][update] method presently.
+    ///
+    /// Never call this from inside a signal handler. It's important that you
+    /// follow the usual pattern of returning messages from signal handler
+    /// closures, or you risk unexpected side effects and potential infinite
+    /// loops.
+    ///
+    /// [update]: ../trait.Component.html#method.update
+    pub fn try_send(&self, message: C::Message) -> Result<(), TrySendError<C::Message>> {
+        self.log(&message);
+        self.channel.unbounded_send(message)
+    }
+
+    /// Get the name of the component this `Scope` belongs to.
+    pub fn name(&self) -> &'static str {
         &self.name
     }
 }

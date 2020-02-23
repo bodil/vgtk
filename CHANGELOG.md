@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ADDED
+
+-   A new function `vgtk::start()` has been added to initialise an `Application` component without
+    starting the GTK event loop. It has the added benefit of returning a `Scope` which you can use
+    to communicate with your component from async jobs other than the standard
+    `UpdateAction::defer()` mechanism.
+
 ## [0.2.0] - 2020-02-20
 
 ### CHANGED
