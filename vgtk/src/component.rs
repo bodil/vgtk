@@ -24,14 +24,48 @@ use crate::vnode::VNode;
 /// An action resulting from a [`Component::update()`](trait.Component.html#method.update).
 pub enum UpdateAction<C: Component> {
     /// No action is necessary.
+    ///
+    /// Use this when your update function didn't modify the component state in
+    /// a way that alters the output of the view function.
     None,
     /// Re-render the widget tree.
+    ///
+    /// Use this when you've modified the component state and the component should
+    /// call its view function and re-render itself to reflect the new state.
     Render,
     /// Run an async task and update again when it completes, passing the message
     /// returned from the [`Future`][Future] to [`Component::update()`][update].
     ///
-    /// You should use [`UpdateAction::defer()`][defer] to construct this, rather than
+    /// You should call [`UpdateAction::defer()`][defer] or rely on the `From<Future>`
+    /// implementation (see the example below) to construct this, rather than
     /// trying to box up your [`Future`][Future] yourself.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[derive(Clone, Debug)]
+    /// enum Message {
+    ///     StartJob,
+    ///     JobDone,
+    /// }
+    ///
+    /// # use vgtk::{gtk, Component, VNode, UpdateAction};
+    /// # use vgtk::lib::gtk::Box;
+    /// # #[derive(Default)]
+    /// # struct Foo;
+    /// # impl Component for Foo {
+    /// #     type Message = Message; type Properties = ();
+    /// #     fn view(&self) -> VNode<Self> { gtk!{ <Box/> } }
+    /// fn update(&mut self, message: Self::Message) -> UpdateAction<Self> {
+    ///     match message {
+    ///         Message::StartJob => async {
+    ///             Message::JobDone
+    ///         }.into(),
+    ///         Message::JobDone => UpdateAction::Render,
+    ///     }
+    /// }
+    /// # }
+    /// ```
     ///
     /// [update]: trait.Component.html#method.update
     /// [defer]: #method.defer
@@ -45,6 +79,16 @@ impl<C: Component> UpdateAction<C> {
     /// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
     pub fn defer(job: impl Future<Output = C::Message> + 'static) -> Self {
         UpdateAction::Defer(job.boxed_local())
+    }
+}
+
+impl<C, F> From<F> for UpdateAction<C>
+where
+    C: Component,
+    F: Future<Output = C::Message> + 'static,
+{
+    fn from(future: F) -> Self {
+        Self::defer(future)
     }
 }
 

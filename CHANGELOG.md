@@ -13,6 +13,9 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     starting the GTK event loop. It has the added benefit of returning a `Scope` which you can use
     to communicate with your component from async jobs other than the standard
     `UpdateAction::defer()` mechanism.
+-   `UpdateAction` now has a `From` implementation for `Future<Output = Component::Message>`,
+    allowing you to return `async {...}.into()` from your update function instead of the slightly
+    more verbose `UpdateAction::defer(async {...})`.
 
 ## [0.2.0] - 2020-02-20
 
