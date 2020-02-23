@@ -601,6 +601,7 @@ pub fn run<C: 'static + Component>() -> i32 {
 /// [run]: fn.run.html
 /// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
 /// [Application::run]: ../gio/trait.ApplicationExt.html#tymethod.run
+/// [Scope]: struct.Scope.html
 pub fn start<C: 'static + Component>() -> (Application, Scope<C>) {
     gtk::init().expect("GTK failed to initialise");
     let partial_task = PartialComponentTask::<C, ()>::new(Default::default(), None, None);
