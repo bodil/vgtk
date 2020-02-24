@@ -554,6 +554,9 @@ pub mod lib {
 /// It's the equivalent of calling [`vgtk::start::<Component>()`][start] and then calling
 /// [`Application::run()`][Application::run] on the returned `Application` object.
 ///
+/// If the component doesn't have an [`Application`][Application] as its top level
+/// object, this function will panic.
+///
 /// # Examples
 ///
 /// ```rust,no_run
@@ -584,6 +587,9 @@ pub fn run<C: 'static + Component>() -> i32 {
 /// Calling this instead of [vgtk::run()][run] is useful if you need to get your
 /// component's [`Scope`][Scope] in order to fire off some async work at startup and
 /// notify it when the work is done.
+///
+/// If the component doesn't have an [`Application`][Application] as its top level
+/// object, this function will panic.
 ///
 /// # Examples
 ///
@@ -643,6 +649,9 @@ pub fn start<C: 'static + Component>() -> (Application, Scope<C>) {
 /// `response` signal is emitted, or to `Err(`[`Canceled`][Canceled]`)` if the dialog is
 /// destroyed before the user responds to it.
 ///
+/// If the component doesn't have a [`Dialog`][Dialog] (or something which implements [`Dialog`][Dialog])
+/// as its top level object, this function will panic.
+///
 /// [Dialog]: ../gtk/struct.Dialog.html
 /// [ResponseType]: ../gtk/enum.ResponseType.html
 /// [Future]: https://doc.rust-lang.org/std/future/trait.Future.html
@@ -689,9 +698,8 @@ fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
 /// Tell the running [`Application`][Application] to quit.
 ///
 /// This calls [`Application::quit()`][Application::quit] on the current default
-/// [`Application`][Application]. It
-/// will cause the [`vgtk::run()`][run] in charge of that [`Application`][Application]
-/// to terminate.
+/// [`Application`][Application]. It will cause the [`vgtk::run()`][run] in
+/// charge of that [`Application`][Application] to terminate.
 ///
 /// [Application]: ../gtk/struct.Application.html
 /// [Application::quit]: ../gio/trait.ApplicationExt.html#tymethod.quit
