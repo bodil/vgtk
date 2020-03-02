@@ -8,7 +8,7 @@ license = "GPL-3.0+"
 [dependencies]
 vgtk = { path = "../../vgtk" }
 strum = "0.18"
-strum_macros = "0.17"
+strum_macros = "0.18"
 pretty_env_logger = "0.4"
 serde = "1.0"
 serde_derive = "1.0"
