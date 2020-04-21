@@ -5,6 +5,7 @@ use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
     self, prelude::*, Application, ApplicationWindow, Bin, Box as GtkBox, Builder, Container,
     Dialog, Grid, GridExt, Menu, MenuButton, MenuItem, ShortcutsWindow, Widget, Window,
+    HeaderBar
 };
 
 use super::State;
@@ -168,6 +169,23 @@ fn add_child<Model: Component>(
         } else {
             panic!(
                 "Box's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(parent) = parent.downcast_ref::<HeaderBar>() {
+        // HeaderBar: added normally, except one widget can be added using
+        // set_custom_title if it has the custom_title=true child property
+        // (which is faked in ext.rs). More than one child with this property is
+        // undefined behaviour.
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            if child_spec.get_child_prop("custom_title").is_some() {
+                parent.set_custom_title(Some(widget));
+            } else {
+                parent.add(widget);
+            }
+        } else {
+            panic!(
+                "HeaderBar's children must be Widgets, but {} was found.",
                 child.get_type()
             );
         }
