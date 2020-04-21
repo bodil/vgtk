@@ -12,7 +12,7 @@ use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
 use gtk::{
     Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt, ImageExt,
-    LabelExt, Widget, Window, WindowPosition, WindowType,
+    LabelExt, HeaderBarExt, Widget, Window, WindowPosition, WindowType,
 };
 
 use colored::Colorize;
@@ -183,6 +183,22 @@ pub trait BoxExtHelpers: BoxExt {
 }
 
 impl<A> BoxExtHelpers for A where A: BoxExt {}
+
+/// Helper trait for [`HeaderBar`][HeaderBar].
+///
+/// [HeaderBar]: ../../gtk/struct.HeaderBar.html
+pub trait HeaderBarExtHelpers: HeaderBarExt {
+    fn get_child_custom_title<P: IsA<Widget>>(&self, _child: &P) -> bool {
+        // Always compare true, it's all taken care of in add_child().
+        true
+    }
+
+    fn set_child_custom_title<P: IsA<Widget>>(&self, _child: &P, _center: bool) {
+        // This is handled by add_child() rules. The setter is a no-op.
+    }
+}
+
+impl<A> HeaderBarExtHelpers for A where A: HeaderBarExt {}
 
 /// Helper trait for [`Image`][Image].
 ///
