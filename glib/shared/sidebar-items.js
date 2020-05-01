@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Shared","Encapsulates memory management logic for shared types."]],"trait":[["SharedMemoryManager",""]]});

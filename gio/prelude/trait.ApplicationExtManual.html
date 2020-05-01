@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `ApplicationExtManual` trait in crate `gio`."><meta name="keywords" content="rust, rustlang, rust-lang, ApplicationExtManual"><title>gio::prelude::ApplicationExtManual - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc trait"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../gio/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a><p class='location'>Trait ApplicationExtManual</p><div class="sidebar-elems"><div class="block items"><a class="sidebar-title" href="#required-methods">Required Methods</a><div class="sidebar-links"><a href="#tymethod.connect_open">connect_open</a><a href="#tymethod.run">run</a></div><a class="sidebar-title" href="#implementors">Implementors</a></div><p class='location'><a href='../index.html'>gio</a>::<wbr><a href='index.html'>prelude</a></p><script>window.sidebarCurrent = {name: 'ApplicationExtManual', ty: 'trait', relpath: ''};</script><script defer src="sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/gio/application.rs.html#14-109' title='goto source code'>[src]</a></span><span class='in-band'>Trait <a href='../index.html'>gio</a>::<wbr><a href='index.html'>prelude</a>::<wbr><a class="trait" href=''>ApplicationExtManual</a></span></h1><div class="docblock type-decl hidden-by-usual-hider"><pre class='rust trait'>pub trait ApplicationExtManual {
+    fn <a href='#tymethod.run' class='fnname'>run</a>(&amp;self, argv: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.i32.html">i32</a>;
+<div class='item-spacer'></div>    fn <a href='#tymethod.connect_open' class='fnname'>connect_open</a>&lt;F:&nbsp;<a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;</a>Self, <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="../../gio/struct.File.html" title="struct gio::File">File</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) + 'static&gt;(<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&amp;self, <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f: F<br>&nbsp;&nbsp;&nbsp;&nbsp;) -&gt; <a class="struct" href="../../glib/signal/struct.SignalHandlerId.html" title="struct glib::signal::SignalHandlerId">SignalHandlerId</a>;
+}</pre></div>
+            <h2 id='required-methods' class='small-section-header'>Required methods<a href='#required-methods' class='anchor'></a></h2><div class='methods'><h3 id='tymethod.run' class='method'><code id='run.v'>fn <a href='#tymethod.run' class='fnname'>run</a>(&amp;self, argv: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.i32.html">i32</a></code></h3><div class='docblock'><p>Runs the application.</p>
+<p>This function is intended to be run from <code>main</code> and its return value
+is intended to be returned by <code>main</code>. Although you are expected to pass
+the <code>argc</code>, <code>argv</code> parameters from <code>main</code> to this function, it is possible
+to pass <code>None</code> if <code>argv</code> is not available or commandline handling is not
+required. Note that on Windows, <code>argc</code> and <code>argv</code> are ignored, and
+<code>g_win32_get_command_line</code> is called internally (for proper support
+of Unicode commandline arguments).</p>
+<p><code>Application</code> will attempt to parse the commandline arguments. You
+can add commandline flags to the list of recognised options by way of
+<code>ApplicationExt::add_main_option_entries</code>. After this, the
+<code>Application::handle-local-options</code> signal is emitted, from which the
+application can inspect the values of its <code>GOptionEntrys</code>.</p>
+<p><code>Application::handle-local-options</code> is a good place to handle options
+such as <code>--version</code>, where an immediate reply from the local process is
+desired (instead of communicating with an already-running instance).
+A <code>Application::handle-local-options</code> handler can stop further processing
+by returning a non-negative value, which then becomes the exit status of
+the process.</p>
+<p>What happens next depends on the flags: if
+<code>ApplicationFlags::HandlesCommandLine</code> was specified then the remaining
+commandline arguments are sent to the primary instance, where a
+<code>Application::command-line</code> signal is emitted. Otherwise, the
+remaining commandline arguments are assumed to be a list of files.
+If there are no files listed, the application is activated via the
+<code>Application::activate</code> signal. If there are one or more files, and
+<code>ApplicationFlags::HandlesOpen</code> was specified then the files are opened
+via the <code>Application::open</code> signal.</p>
+<p>If you are interested in doing more complicated local handling of the
+commandline then you should implement your own <code>Application</code> subclass
+and override <code>local_command_line</code>. In this case, you most likely want
+to return <code>true</code> from your <code>local_command_line</code> implementation to
+suppress the default handling. See
+[gapplication-example-cmdline2.c][gapplication-example-cmdline2]
+for an example.</p>
+<p>If, after the above is done, the use count of the application is zero
+then the exit status is returned immediately. If the use count is
+non-zero then the default main context is iterated until the use count
+falls to zero, at which point 0 is returned.</p>
+<p>If the <code>ApplicationFlags::IsService</code> flag is set, then the service will
+run for as much as 10 seconds with a use count of zero while waiting
+for the message that caused the activation to arrive. After that,
+if the use count falls to zero the application will exit immediately,
+except in the case that <code>ApplicationExt::set_inactivity_timeout</code> is in
+use.</p>
+<p>This function sets the prgname (<code>g_set_prgname</code>), if not already set,
+to the basename of argv[0].</p>
+<p>Much like <code>glib::MainLoop::run</code>, this function will acquire the main context
+for the duration that the application is running.</p>
+<p>Since 2.40, applications that are not explicitly flagged as services
+or launchers (ie: neither <code>ApplicationFlags::IsService</code> or
+<code>ApplicationFlags::IsLauncher</code> are given as flags) will check (from the
+default handler for local_command_line) if &quot;--gapplication-service&quot;
+was given in the command line. If this flag is present then normal
+commandline processing is interrupted and the
+<code>ApplicationFlags::IsService</code> flag is set. This provides a &quot;compromise&quot;
+solution whereby running an application directly from the commandline
+will invoke it in the normal way (which can be useful for debugging)
+while still allowing applications to be D-Bus activated in service
+mode. The D-Bus service file should invoke the executable with
+&quot;--gapplication-service&quot; as the sole commandline argument. This
+approach is suitable for use by most graphical applications but
+should not be used from applications like editors that need precise
+control over when processes invoked via the commandline will exit and
+what their exit status will be.</p>
+<h2 id="argc" class="section-header"><a href="#argc"><code>argc</code></a></h2>
+<p>the argc from <code>main</code> (or 0 if <code>argv</code> is <code>None</code>)</p>
+<h2 id="argv" class="section-header"><a href="#argv"><code>argv</code></a></h2>
+<p>the argv from <code>main</code>, or <code>None</code></p>
+<h1 id="returns" class="section-header"><a href="#returns">Returns</a></h1>
+<p>the exit status</p>
+</div><h3 id='tymethod.connect_open' class='method'><code id='connect_open.v'>fn <a href='#tymethod.connect_open' class='fnname'>connect_open</a>&lt;F:&nbsp;<a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;</a>Self, <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="../../gio/struct.File.html" title="struct gio::File">File</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) + 'static&gt;(<br>&nbsp;&nbsp;&nbsp;&nbsp;&amp;self, <br>&nbsp;&nbsp;&nbsp;&nbsp;f: F<br>) -&gt; <a class="struct" href="../../glib/signal/struct.SignalHandlerId.html" title="struct glib::signal::SignalHandlerId">SignalHandlerId</a></code></h3><div class='docblock'><p>The ::open signal is emitted on the primary instance when there are
+files to open. See <code>ApplicationExt::open</code> for more information.</p>
+<h2 id="files" class="section-header"><a href="#files"><code>files</code></a></h2>
+<p>an array of <code>GFiles</code></p>
+<h2 id="n_files" class="section-header"><a href="#n_files"><code>n_files</code></a></h2>
+<p>the length of <code>files</code></p>
+<h2 id="hint" class="section-header"><a href="#hint"><code>hint</code></a></h2>
+<p>a hint provided by the calling instance</p>
+</div></div><span class='loading-content'>Loading content...</span>
+            <h2 id='implementors' class='small-section-header'>Implementors<a href='#implementors' class='anchor'></a></h2><div class='item-list' id='implementors-list'><h3 id='impl-ApplicationExtManual' class='impl'><code class='in-band'>impl&lt;O:&nbsp;<a class="trait" href="../../glib/object/trait.IsA.html" title="trait glib::object::IsA">IsA</a>&lt;<a class="struct" href="../../gio/struct.Application.html" title="struct gio::Application">Application</a>&gt;&gt; ApplicationExtManual for O</code><a href='#impl-ApplicationExtManual' class='anchor'></a><a class='srclink' href='../../src/gio/application.rs.html#111-147' title='goto source code'>[src]</a></h3><div class='impl-items'><h4 id='method.run' class="method hidden"><code id='run.v-1'>fn <a href='#method.run' class='fnname'>run</a>(&amp;self, argv: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.i32.html">i32</a></code><a class='srclink' href='../../src/gio/application.rs.html#112-117' title='goto source code'>[src]</a></h4><h4 id='method.connect_open' class="method hidden"><code id='connect_open.v-1'>fn <a href='#method.connect_open' class='fnname'>connect_open</a>&lt;F:&nbsp;<a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;</a>Self, <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">&amp;[</a><a class="struct" href="../../gio/struct.File.html" title="struct gio::File">File</a><a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.slice.html">]</a>, &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) + 'static&gt;(<br>&nbsp;&nbsp;&nbsp;&nbsp;&amp;self, <br>&nbsp;&nbsp;&nbsp;&nbsp;f: F<br>) -&gt; <a class="struct" href="../../glib/signal/struct.SignalHandlerId.html" title="struct glib::signal::SignalHandlerId">SignalHandlerId</a></code><a class='srclink' href='../../src/gio/application.rs.html#119-146' title='goto source code'>[src]</a></h4></div></div><span class='loading-content'>Loading content...</span><script type="text/javascript" src="../../implementors/gio/prelude/trait.ApplicationExtManual.js" async></script></section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "gio";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>

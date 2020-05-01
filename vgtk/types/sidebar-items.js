@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["GridPosition","Specifies the position of a widget in a [`Grid`][Grid]."]]});

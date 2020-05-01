@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["ClassStruct","A simple class struct that does not store any additional data or virtual methods."],["InstanceStruct","A simple instance struct that does not store any additional data."]]});

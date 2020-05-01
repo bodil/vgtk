@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["connect_raw",""],["signal_handler_block",""],["signal_handler_disconnect",""],["signal_handler_unblock",""],["signal_stop_emission_by_name",""]],"struct":[["Inhibit","Whether to propagate the signal to the default handler."],["SignalHandlerId","The id of a signal that is returned by `connect`."]]});
