@@ -584,7 +584,7 @@ pub fn run<C: 'static + Component>() -> i32 {
 /// to call [`Application::run()`][Application::run] on this to actually start the
 /// GTK event loop and activate the application.
 ///
-/// Calling this instead of [vgtk::run()][run] is useful if you need to get your
+/// Calling this instead of [`vgtk::run()`][run] is useful if you need to get your
 /// component's [`Scope`][Scope] in order to fire off some async work at startup and
 /// notify it when the work is done.
 ///
@@ -659,7 +659,22 @@ pub fn start<C: 'static + Component>() -> (Application, Scope<C>) {
 pub fn run_dialog<C: 'static + Component>(
     parent: Option<&Window>,
 ) -> impl Future<Output = Result<ResponseType, Canceled>> {
-    let (channel, task) = ComponentTask::<C, ()>::new(Default::default(), None, None);
+    run_dialog_props::<C>(parent, Default::default())
+}
+
+/// Launch a [`Dialog`][Dialog] component as a modal dialog, creating its component with the given initial
+/// properties.
+///
+/// This facilitates using custom components with nontrivial state (including callbacks) as dialogs.
+///
+/// See [`run_dialog`][run_dialog].
+///
+/// [Dialog]: ../gtk/struct.Dialog.html
+pub fn run_dialog_props<C: 'static + Component>(
+    parent: Option<&Window>,
+    props: C::Properties,
+) -> impl Future<Output = Result<ResponseType, Canceled>> {
+    let (channel, task) = ComponentTask::<C, ()>::new(props, None, None);
     let dialog: Dialog = task
         .object()
         .unwrap()
