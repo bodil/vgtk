@@ -9,10 +9,10 @@
 
 use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
-use glib::{GString, IsA, Object, ObjectExt};
+use glib::{GString, IsA, Object, ObjectExt, object::Cast};
 use gtk::{
     Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt, ImageExt,
-    LabelExt, HeaderBarExt, Widget, Window, WindowPosition, WindowType,
+    LabelExt, NotebookExt, HeaderBarExt, Widget, Window, WindowPosition, WindowType,
 };
 
 use colored::Colorize;
@@ -221,6 +221,26 @@ pub trait LabelExtHelpers: LabelExt {
 }
 
 impl<A> LabelExtHelpers for A where A: LabelExt {}
+
+/// Helper trait for [`Notebook`][Notebook].
+///
+/// [Notebook]: ../../gtk/struct.Notebook.html
+pub trait NotebookExtHelpers: NotebookExt {
+    fn set_child_tab_label_text(&self, child: &Object, label: &str) {
+        if let Some(w) = child.downcast_ref::<Widget>() {
+            self.set_tab_label_text(w, label)
+        }
+    }
+    fn get_child_tab_label_text(&self, child: &Object) -> Option<GString> {
+        if let Some(w) = child.downcast_ref::<Widget>() {
+            self.get_tab_label_text(w)
+        } else {
+            None
+        }
+    }
+}
+
+impl<A> NotebookExtHelpers for A where A: NotebookExt {}
 
 /// Helper trait for [`Grid`][Grid] layout.
 ///
