@@ -1,6 +1,6 @@
 [package]
 name = "vgtk"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 license = "LGPL-3.0+"
@@ -17,7 +17,7 @@ gio = "0.9.0"
 glib = "0.10.0"
 gdk = "0.13.0"
 gdk-pixbuf = "0.9.0"
-vgtk-macros = "0.2.0"
+vgtk-macros = "0.3.0"
 proc-macro-hack = "0.5.16"
 proc-macro-nested = "0.1.6"
 log = "0.4.8"
