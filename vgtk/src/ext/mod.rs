@@ -7,6 +7,7 @@
 
 #![allow(missing_docs)]
 
+use cairo::Surface;
 use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
@@ -206,6 +207,10 @@ impl<A> HeaderBarExtHelpers for A where A: HeaderBarExt {}
 pub trait ImageExtHelpers: ImageExt {
     fn set_pixbuf(&self, pixbuf: Option<Pixbuf>) {
         self.set_from_pixbuf(pixbuf.as_ref());
+    }
+
+    fn set_surface(&self, surf: Option<Surface>) {
+        self.set_from_surface(surf.as_ref());
     }
 }
 
