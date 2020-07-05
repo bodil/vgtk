@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### CHANGED
+
+-   `vgtk` now uses `gtk` version 0.9, along with the matching versions of its dependencies. This
+    will affect your code, as many method names have changed, most notably the names of specialised
+    widget constructors. You should consult the
+    [gtk-rs blog](https://gtk-rs.org/blog/2020/07/04/new-release.html) for details on the changes.
+
+### ADDED
+
+-   New child properties `action_widget_start` and `action_widget_end` for `Notebook` let you add
+    children as action widgets to notebooks. (#47)
+-   There's a new function `vgtk::run_dialog_props()` for launching a dialog component with a given
+    set of properties, where `vgtk::run_dialog()` would use `Default::default()` to construct a
+    properties object for you. (#43)
+-   A new child property `custom_title` on `HeaderBar` lets you set a widget as a custom title,
+    emulating the `set_custom_title()` method. (#38)
+
 ## [0.2.1] - 2020-02-24
 
 ### ADDED
