@@ -27,7 +27,7 @@ fn build_obj<A: IsA<Object>, Model: Component>(spec: &VObject<Model>) -> A {
         ui += &format!("<interface><object class=\"{}\"", class);
         ui += "/></interface>";
 
-        let builder = Builder::new_from_string(&ui);
+        let builder = Builder::from_string(&ui);
         let objects = builder.get_objects();
         objects
             .last()
@@ -469,7 +469,10 @@ impl<Model: 'static + Component> GtkState<Model> {
             child.unmount();
         }
         if let Ok(widget) = self.object.downcast::<Widget>() {
-            widget.destroy();
+            #[allow(unsafe_code)]
+            unsafe {
+                widget.destroy();
+            }
         }
     }
 }

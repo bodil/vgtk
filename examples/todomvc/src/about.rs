@@ -13,8 +13,8 @@ static DOG: &[u8] = include_bytes!("dog.png");
 
 impl Default for AboutDialog {
     fn default() -> Self {
-        let data_stream = MemoryInputStream::new_from_bytes(&Bytes::from_static(DOG));
-        let dog = Pixbuf::new_from_stream(&data_stream, None as Option<&Cancellable>).unwrap();
+        let data_stream = MemoryInputStream::from_bytes(&Bytes::from_static(DOG));
+        let dog = Pixbuf::from_stream(&data_stream, None as Option<&Cancellable>).unwrap();
         AboutDialog { dog }
     }
 }
@@ -25,7 +25,7 @@ impl Component for AboutDialog {
 
     fn view(&self) -> VNode<Self> {
         gtk! {
-            <Dialog::new_with_buttons(
+            <Dialog::with_buttons(
                 Some("About TodoMVC"),
                 None as Option<&Window>,
                 DialogFlags::MODAL,
