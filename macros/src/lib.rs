@@ -2,7 +2,6 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 
 #[allow(clippy::useless_attribute)]
-#[allow(rust_2018_idioms)]
 extern crate proc_macro;
 
 use proc_macro_hack::proc_macro_hack;
