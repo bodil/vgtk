@@ -4,8 +4,8 @@ use gio::{Action, ActionExt, ActionMapExt};
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
     self, prelude::*, Application, ApplicationWindow, Bin, Box as GtkBox, Builder, Container,
-    Dialog, Grid, GridExt, Menu, MenuButton, MenuItem, Notebook, ShortcutsWindow, Widget,
-    Window, HeaderBar
+    Dialog, Grid, GridExt, HeaderBar, Menu, MenuButton, MenuItem, Notebook, ShortcutsWindow,
+    Widget, Window,
 };
 
 use super::State;
@@ -28,7 +28,7 @@ fn build_obj<A: IsA<Object>, Model: Component>(spec: &VObject<Model>) -> A {
         ui += &format!("<interface><object class=\"{}\"", class);
         ui += "/></interface>";
 
-        let builder = Builder::new_from_string(&ui);
+        let builder = Builder::from_string(&ui);
         let objects = builder.get_objects();
         objects
             .last()
@@ -467,7 +467,7 @@ impl<Model: 'static + Component> GtkState<Model> {
         let mut remove = Vec::new();
         for handler in handlers {
             let key = (handler.name, handler.id);
-            seen.insert(key.clone());
+            seen.insert(key.to_owned());
             if let std::collections::hash_map::Entry::Vacant(entry) = self.handlers.entry(key) {
                 let handle = (handler.set)(self.object.upcast_ref(), scope);
                 entry.insert(handle);
@@ -475,7 +475,7 @@ impl<Model: 'static + Component> GtkState<Model> {
         }
         for key in self.handlers.keys() {
             if !seen.contains(key) {
-                remove.push(key.clone());
+                remove.push(key.to_owned());
             }
         }
         for key in remove {
@@ -489,7 +489,10 @@ impl<Model: 'static + Component> GtkState<Model> {
             child.unmount();
         }
         if let Ok(widget) = self.object.downcast::<Widget>() {
-            widget.destroy();
+            #[allow(unsafe_code)]
+            unsafe {
+                widget.destroy();
+            }
         }
     }
 }

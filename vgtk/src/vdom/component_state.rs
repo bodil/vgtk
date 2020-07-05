@@ -1,7 +1,7 @@
 use futures::channel::mpsc::UnboundedSender;
 use glib::prelude::*;
 use glib::{MainContext, Object};
-use gtk::{Widget, WidgetExt};
+use gtk::{prelude::*, Widget};
 
 use std::any::TypeId;
 use std::marker::PhantomData;
@@ -63,7 +63,10 @@ impl<Model: 'static + Component> ComponentState<Model> {
     pub fn unmount(self) {
         self.state.unmounting();
         if let Ok(widget) = self.object.downcast::<Widget>() {
-            widget.destroy();
+            #[allow(unsafe_code)]
+            unsafe {
+                widget.destroy();
+            }
         }
     }
 }

@@ -83,6 +83,7 @@ impl<A> Clone for Callback<A> {
 impl<A> PartialEq for Callback<A> {
     fn eq(&self, other: &Self) -> bool {
         if let (Some(left), Some(right)) = (&self.0, &other.0) {
+            #[allow(clippy::vtable_address_comparisons)] // It's OK, it just needs to be a best guess.
             Rc::ptr_eq(left, right)
         } else {
             false

@@ -866,7 +866,7 @@ where
     }
     dialog.show();
     let response = on_signal!(dialog, connect_response).await;
-    dialog.destroy();
+    dialog.close();
     response.unwrap()
 }
 

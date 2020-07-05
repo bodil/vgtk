@@ -11,8 +11,8 @@ use gdk_pixbuf::Pixbuf;
 use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
 use gtk::{
-    Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt, ImageExt,
-    LabelExt, NotebookExt, HeaderBarExt,  Widget, Window, WindowPosition, WindowType,
+    Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt,
+    HeaderBarExt, ImageExt, LabelExt, NotebookExt, Widget, Window, WindowPosition, WindowType,
 };
 
 use colored::Colorize;
@@ -215,7 +215,7 @@ impl<A> ImageExtHelpers for A where A: ImageExt {}
 ///
 /// [Label]: ../../gtk/struct.Label.html
 pub trait LabelExtHelpers: LabelExt {
-    fn get_markup(&self) -> Option<GString> {
+    fn get_markup(&self) -> GString {
         self.get_label()
     }
 }

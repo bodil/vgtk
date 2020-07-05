@@ -71,7 +71,7 @@ impl Model {
                     <Entry placeholder_text="What needs to be done?"
                            Box::expand=true Box::fill=true
                            on activate=|entry| {
-                               let label = entry.get_text().map(|s| s.to_string()).unwrap_or_default();
+                               let label = entry.get_text().to_string();
                                entry.select_region(0, label.len() as i32);
                                Msg::Add {
                                    item: label
@@ -264,7 +264,7 @@ impl Component for Model {
                     <HeaderBar title=format!("TodoMVC - {}{}", title, clean) subtitle="wtf do we do now" show_close_button=true>
                         <MenuButton HeaderBar::pack_type=PackType::End @MenuButtonExt::direction=ArrowType::Down relief=ReliefStyle::None
                                     image="open-menu-symbolic">
-                            <Menu::new_from_model(&main_menu)/>
+                            <Menu::from_model(&main_menu)/>
                         </MenuButton>
                     </HeaderBar>
                     {

@@ -129,6 +129,18 @@ impl<'a> PropertyValueCoerce<'a, Option<&'a str>> for String {
     }
 }
 
+impl<'a> PropertyValueCompare<'a, GString> for String {
+    fn property_compare(left: GString, right: &String) -> bool {
+        left.as_str() == right
+    }
+}
+
+impl<'a> PropertyValueCoerce<'a, GString> for String {
+    fn property_coerce(value: &'a String) -> GString {
+        value.to_owned().into()
+    }
+}
+
 impl<'a> PropertyValueCompare<'a, Option<GString>> for String {
     fn property_compare(left: Option<GString>, right: &String) -> bool {
         if let Some(left) = left {
@@ -219,7 +231,7 @@ where
 {
     fn into_property_value(self) -> PropertyValue<'a, Image, Get, Set> {
         let (name, size) = self;
-        PropertyValue::new(Image::new_from_icon_name(Some(name), size))
+        PropertyValue::new(Image::from_icon_name(Some(name), size))
     }
 }
 
@@ -228,6 +240,6 @@ where
     Image: PropertyValueCompare<'a, Get> + PropertyValueCoerce<'a, Set>,
 {
     fn into_property_value(self) -> PropertyValue<'a, Image, Get, Set> {
-        PropertyValue::new(Image::new_from_icon_name(Some(self), IconSize::Button))
+        PropertyValue::new(Image::from_icon_name(Some(self), IconSize::Button))
     }
 }
