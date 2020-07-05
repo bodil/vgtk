@@ -12,7 +12,7 @@ use gio::{Action, ActionExt, ApplicationFlags};
 use glib::{GString, IsA, Object, ObjectExt};
 use gtk::{
     Application, ApplicationWindowExt, BoxExt, GridExt, GtkApplicationExt, GtkWindowExt,
-    HeaderBarExt, ImageExt, LabelExt, Widget, Window, WindowPosition, WindowType,
+    HeaderBarExt, ImageExt, LabelExt, NotebookExt, Widget, Window, WindowPosition, WindowType,
 };
 
 use colored::Colorize;
@@ -221,6 +221,28 @@ pub trait LabelExtHelpers: LabelExt {
 }
 
 impl<A> LabelExtHelpers for A where A: LabelExt {}
+
+/// Helper trait for [`Notebook`][Notebook].
+///
+/// [Notebook]: ../../gtk/struct.Notebook.html
+pub trait NotebookExtHelpers: NotebookExt {
+    fn set_child_action_widget_start<P: IsA<Widget>>(&self, _child: &P, _val: bool) {
+        // This is handled by add_child() rules. The setter is a no-op.
+    }
+    fn get_child_action_widget_start<P: IsA<Widget>>(&self, _child: &P) -> bool {
+        // Always compare true, it's all taken care of in add_child().
+        true
+    }
+    fn set_child_action_widget_end<P: IsA<Widget>>(&self, _child: &P, _val: bool) {
+        // This is handled by add_child() rules. The setter is a no-op.
+    }
+    fn get_child_action_widget_end<P: IsA<Widget>>(&self, _child: &P) -> bool {
+        // Always compare true, it's all taken care of in add_child().
+        true
+    }
+}
+
+impl<A> NotebookExtHelpers for A where A: NotebookExt {}
 
 /// Helper trait for [`Grid`][Grid] layout.
 ///

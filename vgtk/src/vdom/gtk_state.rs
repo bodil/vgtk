@@ -4,7 +4,8 @@ use gio::{Action, ActionExt, ActionMapExt};
 use glib::{prelude::*, Object, SignalHandlerId};
 use gtk::{
     self, prelude::*, Application, ApplicationWindow, Bin, Box as GtkBox, Builder, Container,
-    Dialog, Grid, GridExt, HeaderBar, Menu, MenuButton, MenuItem, ShortcutsWindow, Widget, Window,
+    Dialog, Grid, GridExt, HeaderBar, Menu, MenuButton, MenuItem, Notebook, ShortcutsWindow,
+    Widget, Window,
 };
 
 use super::State;
@@ -198,6 +199,25 @@ fn add_child<Model: Component>(
         } else {
             panic!(
                 "Grid's children must be Widgets, but {} was found.",
+                child.get_type()
+            );
+        }
+    } else if let Some(parent) = parent.downcast_ref::<Notebook>() {
+        // Notebook: added normally, except one widget can be added using
+        // set_action_widget if it has the action_widget_start or
+        // action_widget_end child property (which are faked in ext.rs). More
+        // than one child with each of these properties is undefined behaviour.
+        if let Some(widget) = child.downcast_ref::<Widget>() {
+            if child_spec.get_child_prop("action_widget_start").is_some() {
+                parent.set_action_widget(widget, gtk::PackType::Start);
+            } else if child_spec.get_child_prop("action_widget_end").is_some() {
+                parent.set_action_widget(widget, gtk::PackType::End);
+            } else {
+                parent.add(widget);
+            }
+        } else {
+            panic!(
+                "Notebook's children must be Widgets, but {} was found.",
                 child.get_type()
             );
         }
