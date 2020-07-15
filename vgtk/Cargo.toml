@@ -21,7 +21,7 @@ vgtk-macros = "0.3.0"
 proc-macro-hack = "0.5.16"
 proc-macro-nested = "0.1.6"
 log = "0.4.8"
-colored = "1.9.3"
+colored = "2.0.0"
 futures = "0.3.5"
 
 [dependencies.gtk]
