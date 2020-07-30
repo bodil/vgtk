@@ -216,8 +216,8 @@ fn add_child<Model: Component>(
             }else if child_spec.get_child_prop("tab_with_label").is_some() {
                 if let Some(widget) = child.downcast_ref::<gtk::Box>() {
                     let mut container = widget.get_children();
-                    let content = container.pop().unwrap();
-                    let label = container.pop().unwrap();
+                    let content = container.pop().expect("Tab item content is missing");
+                    let label = container.pop().expect("Tab item label is missing");
                     widget.remove(&content);
                     widget.remove(&label);
                     parent.remove(widget);
