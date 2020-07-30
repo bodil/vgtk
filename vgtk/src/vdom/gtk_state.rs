@@ -12,6 +12,7 @@ use super::State;
 use crate::component::Component;
 use crate::scope::Scope;
 use crate::vnode::{VHandler, VNode, VObject, VProperty};
+use crate::lib::gtk::{Orientation};
 
 pub(crate) struct GtkState<Model: Component> {
     pub(crate) object: Object,
@@ -203,19 +204,34 @@ fn add_child<Model: Component>(
             );
         }
     } else if let Some(parent) = parent.downcast_ref::<Notebook>() {
-        // Notebook: added normally, except one widget can be added using
-        // set_action_widget if it has the action_widget_start or
-        // action_widget_end child property (which are faked in ext.rs). More
-        // than one child with each of these properties is undefined behaviour.
         if let Some(widget) = child.downcast_ref::<Widget>() {
+            // Notebook: added normally, except one widget can be added using
+            // set_action_widget if it has the action_widget_start or
+            // action_widget_end child property (which are faked in ext.rs). More
+            // than one child with each of these properties is undefined behaviour.
             if child_spec.get_child_prop("action_widget_start").is_some() {
                 parent.set_action_widget(widget, gtk::PackType::Start);
-            } else if child_spec.get_child_prop("action_widget_end").is_some() {
+            }else if child_spec.get_child_prop("action_widget_end").is_some() {
                 parent.set_action_widget(widget, gtk::PackType::End);
-            } else {
+            }else if child_spec.get_child_prop("tab_with_label").is_some() {
+                if let Some(widget) = child.downcast_ref::<gtk::Box>() {
+                    let mut container = widget.get_children();
+                    let content = container.pop().unwrap();
+                    let label = container.pop().unwrap();
+                    widget.remove(&content);
+                    widget.remove(&label);
+                    parent.remove(widget);
+
+                    let wrapper = gtk::Box::new(Orientation::Horizontal, 0);
+                    wrapper.add(&label);
+                    parent.append_page(&content, Some(&wrapper));
+                }else {
+                    parent.add(widget);
+                }
+            }else {
                 parent.add(widget);
             }
-        } else {
+        }else {
             panic!(
                 "Notebook's children must be Widgets, but {} was found.",
                 child.get_type()

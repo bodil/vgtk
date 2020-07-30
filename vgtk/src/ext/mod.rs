@@ -240,6 +240,13 @@ pub trait NotebookExtHelpers: NotebookExt {
         // Always compare true, it's all taken care of in add_child().
         true
     }
+    fn set_child_tab_with_label<P: IsA<Widget>>(&self, _child: &P, _val: bool) {
+        // This is handled by add_child() rules. The setter is a no-op.
+    }
+    fn get_child_tab_with_label<P: IsA<Widget>>(&self, _child: &P) -> bool {
+        // Always compare true, it's all taken care of in add_child().
+        true
+    }
 }
 
 impl<A> NotebookExtHelpers for A where A: NotebookExt {}
