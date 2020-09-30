@@ -12,6 +12,9 @@ readme = "../README.md"
 categories = ["gui"]
 keywords = ["gtk"]
 
+[features]
+dox = ["gtk/embed-lgpl-docs"]
+
 [dependencies]
 gio = "0.9.0"
 glib = "0.10.0"
@@ -26,4 +29,7 @@ futures = "0.3.5"
 
 [dependencies.gtk]
 version = "0.9.0"
-features = ["embed-lgpl-docs", "v3_20"]
+features = ["v3_20"]
+
+[package.metadata.docs.rs]
+features = ["dox"]
