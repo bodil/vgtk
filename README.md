@@ -85,7 +85,7 @@ fn main() {
 ## Installation
 
 You'll need to ensure GTK is installed and usable on your system before you can use `vgtk`. Please
-consult the [Gtk-rs requirements doc](https://gtk-rs.org/docs/requirements.html) for detailed
+consult the [Gtk documentation](https://www.gtk.org/docs/installations/) for detailed
 instructions. It can be especially involved on Windows, but if you follow their instructions
 carefully, it does eventually work.
 
