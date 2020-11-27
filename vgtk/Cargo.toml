@@ -13,7 +13,7 @@ categories = ["gui"]
 keywords = ["gtk"]
 
 [features]
-dox = ["gtk/embed-lgpl-docs"]
+gtk-docs = ["gtk/embed-lgpl-docs"]
 
 [dependencies]
 gio = "0.9.0"
@@ -32,4 +32,4 @@ version = "0.9.0"
 features = ["v3_20"]
 
 [package.metadata.docs.rs]
-features = ["dox"]
+features = ["gtk-docs"]
