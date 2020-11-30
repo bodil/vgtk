@@ -15,9 +15,17 @@ jobs:
                 rust: [stable, beta, nightly]
                 # "verbose" just means debug mode here, it's effectively a no-op flag
                 release: [verbose, release]
+                include:
+                  - os: windows-latest
+                    toolchain: -gnu
 
         steps:
             - uses: actions/checkout@v1
+
+            - uses: msys2/setup-msys2@v2
+              with:
+                path-type: inherit
+              if: matrix.os == 'windows-latest'
 
             # lunix deps
             - name: (Lunix) Install Gtk build environment
@@ -32,43 +40,23 @@ jobs:
               run: |
                   brew install gtk+3
 
-            # check windows deps
-            - name: (Windows) Check available Gtk version
-              if: matrix.os == 'windows-latest'
-              shell: pwsh
-              run: |
-                  vcpkg search gtk | Select-String "^gtk " > gtk-version.txt
-                  Get-Content gtk-version.txt
-
-            # cache windows deps
-            - name: (Windows) Cache vcpkg packages
-              if: matrix.os == 'windows-latest'
-              id: cache-vcpkg
-              uses: actions/cache@v1
-              with:
-                  path: C:\vcpkg\installed
-                  key: ${{ runner.os }}-vcpkg-gtk-${{ hashFiles('gtk-version.txt') }}
-
             # windows deps
             - name: (Windows) Install Gtk build environment
-              if: matrix.os == 'windows-latest' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+              if: matrix.os == 'windows-latest'
+              shell: msys2 {0}
               run: |
-                  vcpkg install gtk:x64-windows
-                  copy C:\vcpkg\installed\x64-windows\lib\gtk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gtk-3.lib
-                  copy C:\vcpkg\installed\x64-windows\lib\gdk-3.0.lib C:\vcpkg\installed\x64-windows\lib\gdk-3.lib
+                pacman -S --noconfirm mingw-w64-x86_64-gtk3 mingw-w64-x86_64-toolchain
 
             # cargo away
             - uses: hecrj/setup-rust-action@v1
               with:
-                  rust-version: ${{ matrix.rust }}
+                  rust-version: ${{ matrix.rust }}${{ matrix.toolchain }}
             - name: (Cowindows) Build tree
               if: matrix.os != 'windows-latest'
               run: cargo build --all-features --verbose --verbose --${{ matrix.release }}
             - name: (Windows) Build tree
               if: matrix.os == 'windows-latest'
-              env:
-                  GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
-                  LIB: C:\vcpkg\installed\x64-windows\lib
+              shell: msys2 {0}
               run: cargo build --all-features --verbose --verbose --${{ matrix.release }}
             - name: Run tests in macros
               run: cd macros; cargo test --all-features --verbose --verbose --${{ matrix.release }}
@@ -77,9 +65,7 @@ jobs:
               run: cd vgtk; cargo test --all-features --verbose --verbose --${{ matrix.release }}
             - name: (Windows) Run tests in lib
               if: matrix.os == 'windows-latest'
-              env:
-                  GTK_LIB_DIR: C:\vcpkg\installed\x64-windows\lib
-                  LIB: C:\vcpkg\installed\x64-windows\lib
+              shell: msys2 {0}
               run: cd vgtk; cargo test --all-features --verbose --verbose --${{ matrix.release }}
 
     clippy:
