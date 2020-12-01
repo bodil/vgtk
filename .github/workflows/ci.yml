@@ -22,10 +22,15 @@ jobs:
         steps:
             - uses: actions/checkout@v1
 
-            - uses: msys2/setup-msys2@v2
+            # windows deps
+            - name: (Windows) Install Gtk build environment
+              if: matrix.os == 'windows-latest'
+              uses: msys2/setup-msys2@v2
               with:
                 path-type: inherit
-              if: matrix.os == 'windows-latest'
+                install: >
+                  mingw-w64-x86_64-gtk3
+                  mingw-w64-x86_64-toolchain
 
             # lunix deps
             - name: (Lunix) Install Gtk build environment
@@ -39,13 +44,6 @@ jobs:
               if: matrix.os == 'macOS-latest'
               run: |
                   brew install gtk+3
-
-            # windows deps
-            - name: (Windows) Install Gtk build environment
-              if: matrix.os == 'windows-latest'
-              shell: msys2 {0}
-              run: |
-                pacman -S --noconfirm mingw-w64-x86_64-gtk3 mingw-w64-x86_64-toolchain
 
             # cargo away
             - uses: hecrj/setup-rust-action@v1
