@@ -276,14 +276,18 @@ pub fn expand_handler(
             vgtk::lib::glib::MainContext::ref_thread_default().spawn_local(
                 async move {
                     let msg = async move { #body_s }.await;
+                    let ret = msg.into_signal_return();
                     scope.send_message(msg);
+                    ret
                 }
             )
         })
     } else {
         quote!({
             let msg = { #body_s };
+            let ret = msg.into_signal_return();
             scope.send_message(msg);
+            ret
         })
     };
     quote!(

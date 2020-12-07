@@ -392,3 +392,15 @@ where
         self.get_cell_height(child)
     }
 }
+
+/// A trait for converting a callback message type into a callback return type
+/// Most callbacks return (), but some require a boolean or enum.
+/// A blanked implentation is provided for (), but other conversions are user-defined
+pub trait IntoSignalReturn<T>: Sized {
+    /// Convert message to callback return type
+    fn into_signal_return(&self) -> T;
+}
+
+impl<T> IntoSignalReturn<()> for T {
+    fn into_signal_return(&self) { }
+}
