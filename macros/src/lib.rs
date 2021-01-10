@@ -1,5 +1,6 @@
 #![cfg_attr(can_show_location_of_runtime_parse_error, feature(proc_macro_span))]
 #![deny(rust_2018_idioms, unsafe_code)]
+#![allow(unused_extern_crates)]
 
 #[allow(clippy::useless_attribute)]
 extern crate proc_macro;
