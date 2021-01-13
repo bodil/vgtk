@@ -63,7 +63,6 @@ impl Model {
     }
 
     fn main_panel(&self) -> VNode<Model> {
-        #![allow(clippy::field_reassign_with_default)]
         gtk! {
             <Box spacing=10 orientation=Orientation::Vertical>
                 <Box spacing=10 orientation=Orientation::Horizontal Box::expand=false>
