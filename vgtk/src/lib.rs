@@ -624,7 +624,7 @@ pub fn start<C: 'static + Component>() -> (Application, Scope<C>) {
     let scope = partial_task.scope();
     let const_app = app.clone();
 
-    let constructor = once(move |_| {
+    let constructor = once(AndThen::DoNothing, move |_| {
         let (channel, task) = partial_task.finalise();
         MainContext::ref_thread_default().spawn_local(task);
         channel.unbounded_send(ComponentMessage::Mounted).unwrap();
@@ -686,7 +686,10 @@ pub fn run_dialog_props<C: 'static + Component>(
     MainContext::ref_thread_default().spawn_local(task);
     let (notify, result) = oneshot::channel();
     channel.unbounded_send(ComponentMessage::Mounted).unwrap();
-    let resolve = once(move |response| if notify.send(response).is_err() {});
+    let resolve = once(
+        AndThen::Panic,
+        |response| if notify.send(response).is_err() {},
+    );
     dialog.connect_response(move |_, response| {
         resolve(response);
         channel.unbounded_send(ComponentMessage::Unmounted).unwrap()
@@ -696,7 +699,7 @@ pub fn run_dialog_props<C: 'static + Component>(
 }
 
 /// Turn an `FnOnce(A)` into an `Fn(A)` that will panic if you call it twice.
-fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
+fn once<A, F: FnOnce(A)>(and_then: AndThen, f: F) -> impl Fn(A) {
     use std::cell::Cell;
     use std::rc::Rc;
 
@@ -705,9 +708,18 @@ fn once<A, F: FnOnce(A)>(f: F) -> impl Fn(A) {
         if let Some(f) = f.take() {
             f(value);
         } else {
-            panic!("vgtk::once() function called twice 😒");
+            match and_then {
+                AndThen::Panic => panic!("vgtk::once() function called twice 😒"),
+                AndThen::DoNothing => {}
+            }
         }
     }
+}
+
+/// What a [`once`] function should do if called twice.
+enum AndThen {
+    Panic,
+    DoNothing,
 }
 
 /// Tell the running [`Application`][Application] to quit.
