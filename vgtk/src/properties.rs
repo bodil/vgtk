@@ -2,6 +2,7 @@
 
 use std::marker::PhantomData;
 
+use cairo::Surface;
 use glib::{Cast, GString};
 use gtk::{IconSize, Image, ImageExt, Widget};
 
@@ -175,9 +176,35 @@ impl<'a> PropertyValueCoerce<'a, Option<&'a Image>> for Image {
     }
 }
 
+impl<'a> PropertyValueCoerce<'a, Option<&'a Surface>> for Surface {
+    fn property_coerce(value: &'a Surface) -> Option<&'a Surface> {
+        Some(value)
+    }
+}
+
 impl PropertyValueCompare<'_, Vec<GString>> for &'_ [&'_ str] {
     fn property_compare(left: Vec<GString>, right: &&[&str]) -> bool {
         left == *right
+    }
+}
+
+impl PropertyValueCompare<'_, Surface> for Option<Surface> {
+    fn property_compare(left: Surface, right: &Option<Surface>) -> bool {
+        if let Some(right) = right {
+            left.to_raw_none() == right.to_raw_none()
+        } else {
+            false
+        }
+    }
+}
+
+impl PropertyValueCompare<'_, Option<Surface>> for Surface {
+    fn property_compare(left: Option<Surface>, right: &Surface) -> bool {
+        if let Some(left) = left {
+            left.to_raw_none() == right.to_raw_none()
+        } else {
+            false
+        }
     }
 }
 
